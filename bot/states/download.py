@@ -4,38 +4,48 @@ from aiogram.fsm.state import StatesGroup, State
 
 class DownloadStates(StatesGroup):
     """
-    Finite State Machine for download workflow.
+    Finite State Machine for complete download workflow.
     
-    Explicit branching into video vs audio paths:
-    1. User enters URL
-    2. System detects available formats
-    3. User chooses VIDEO or AUDIO
-    4. Video path: quality → codec → subtitles → send_as → downloading → uploading → done
-    5. Audio path: format → downloading → uploading → done
+    Flow:
+    1. waiting_for_url - User sends URL
+    2. selecting_format_type - Choose VIDEO or AUDIO
+    3. Video path:
+       - video_quality_selection - Select resolution (4K, 1080p, 720p, etc)
+       - video_codec_selection - Select codec (H.264, AV1, VP9)
+       - selecting_subtitle - Choose subtitle language or skip
+       - selecting_send_as - Choose delivery method (Video/Document)
+    4. Audio path:
+       - audio_format_selection - Select audio format (MP3, AAC, OPUS)
+    5. downloading - Download in progress
+    6. uploading - Upload to Telegram
+    7. completed - Done
     """
     
-    # Initial state
+    # STEP 1: URL Reception
     waiting_for_url = State()
     
-    # Format type selection (Video vs Audio)
+    # STEP 2: Format Type Selection (Video or Audio)
     selecting_format_type = State()
     
-    # Video-specific states
+    # STEP 3: VIDEO PATH - Quality Selection
     video_quality_selection = State()
+    
+    # STEP 4: VIDEO PATH - Codec Selection
     video_codec_selection = State()
     
-    # Audio-specific states
+    # STEP 5: VIDEO PATH - Subtitle Selection (Optional)
+    video_selecting_subtitle = State()
+    
+    # STEP 6: VIDEO PATH - Send As Selection
+    video_selecting_send_as = State()
+    
+    # STEP 3: AUDIO PATH - Format Selection
     audio_format_selection = State()
     
-    # Shared optional states
-    selecting_subtitle = State()
+    # STEP 4: AUDIO PATH - Subtitle Selection (Optional)
+    audio_selecting_subtitle = State()
     
-    # Video-only states
-    selecting_send_as = State()  # Video / Audio / Document
-    
-    # Common execution states
-    selecting_format = State()  # Legacy - for backward compatibility
-    confirming_download = State()
+    # Execution states (common for both)
     downloading = State()
     uploading = State()
     completed = State()

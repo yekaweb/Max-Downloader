@@ -1,0 +1,82 @@
+{
+  "start": {
+    "title": "🤖 Welcome to DLBot!",
+    "description": "I'm a professional download bot for:\n• 🎥 YouTube\n• 📸 Instagram\n• 🐦 Twitter\n\nPress the button below to start!",
+    "button_download": "📥 Download Video",
+    "button_guide": "📚 Guide"
+  },
+  "help": {
+    "title": "📖 Available Commands",
+    "commands": "/start - Start\n/help - Help\n/download - Download Video\n/profile - Show Profile\n/settings - Settings\n/admin - Admin Panel (Admin only)",
+    "button_download": "📥 Start Download"
+  },
+  "download": {
+    "title": "📥 Download Video",
+    "description": "Which platform do you want to download from?",
+    "youtube": "🎥 YouTube",
+    "instagram": "📸 Instagram",
+    "twitter": "🐦 Twitter",
+    "enter_url": "Please send the video link:",
+    "downloading": "⏳ Downloading...",
+    "success": "✅ Download successful!",
+    "error": "❌ Download error. Please try again.",
+    "invalid_url": "❌ Invalid link.",
+    "processing": "⏳ Processing...",
+    "uploading": "📤 Uploading to Telegram...",
+    "completed": "✅ Video sent to you!"
+  },
+  "profile": {
+    "title": "👤 Your Profile",
+    "user_id": "User ID",
+    "downloads": "Total Downloads",
+    "joined": "Join Date",
+    "language": "Language",
+    "premium": "Status: "
+  },
+  "admin": {
+    "title": "⚙️ Admin Panel",
+    "not_admin": "❌ You are not an admin!",
+    "stats": {
+      "title": "📊 Statistics",
+      "total_users": "Total Users",
+      "active_users": "Active Users",
+      "total_downloads": "Total Downloads",
+      "today_downloads": "Today's Downloads"
+    },
+    "broadcast": {
+      "title": "📢 Send Broadcast",
+      "send_message": "Send your message:",
+      "sending": "⏳ Sending...",
+      "completed": "✅ Message sent!"
+    },
+    "users": {
+      "title": "👥 User Management",
+      "list": "User List"
+    }
+  },
+  "guide": {
+    "title": "📚 User Guide",
+    "user_guide": "**User Guide:**\n\n1️⃣ Press 'Download Video'\n2️⃣ Select platform (YouTube, Instagram, Twitter)\n3️⃣ Send the video link\n4️⃣ Wait for download\n5️⃣ Video will be sent to you\n\n⚠️ Note: Only download public videos.",
+    "admin_guide": "**Admin Guide:**\n\n/admin - Enter panel\n- 📊 Stats: View statistics\n- 📢 Broadcast: Send message\n- 👥 Users: Manage users"
+  },
+  "about": {
+    "title": "ℹ️ About DLBot",
+    "version": "Version 1.0.0",
+    "description": "Professional bot for downloading videos and content from various platforms.",
+    "features": "✨ Features:\n• Download from YouTube, Instagram, Twitter\n• Fast speed\n• High quality\n• Easy interface\n• Admin panel",
+    "support": "💬 Support: @yekaweb"
+  },
+  "errors": {
+    "general": "❌ An error occurred. Please try again.",
+    "timeout": "⏱️ Download timeout.",
+    "not_found": "🔍 Video not found.",
+    "too_large": "📦 File is too large.",
+    "invalid_format": "📋 Invalid format."
+  },
+  "settings": {
+    "title": "⚙️ Settings",
+    "language": "🌐 Language",
+    "notifications": "🔔 Notifications",
+    "privacy": "🔒 Privacy"
+  }
+}

@@ -1,6 +1,19 @@
 """Inline Keyboards for DLBot"""
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from .download import (
+    get_format_type_keyboard,
+    get_video_quality_keyboard,
+    get_video_codec_keyboard,
+    get_subtitle_keyboard,
+    get_send_as_keyboard,
+    get_audio_format_keyboard,
+)
+from .cached_files import (
+    get_cached_files_keyboard,
+    get_cache_action_keyboard,
+    get_cache_format_options_keyboard,
+)
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
@@ -126,5 +139,14 @@ __all__ = [
     "main_menu_kb",
     "download_platform_kb",
     "admin_menu_kb",
-    "language_kb"
+    "language_kb",
+    "get_format_type_keyboard",
+    "get_video_quality_keyboard",
+    "get_video_codec_keyboard",
+    "get_subtitle_keyboard",
+    "get_send_as_keyboard",
+    "get_audio_format_keyboard",
+    "get_cached_files_keyboard",
+    "get_cache_action_keyboard",
+    "get_cache_format_options_keyboard",
 ]

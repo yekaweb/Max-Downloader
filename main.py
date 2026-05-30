@@ -44,7 +44,7 @@ async def main():
     
     # Import bot components (lazy import)
     try:
-        from bot.loader_simple import bot, dp
+        from bot.loader_complete import bot, dp
         if not bot or not dp:
             raise ImportError("Bot or Dispatcher initialization failed")
         logger.info("✅ Bot components loaded successfully")

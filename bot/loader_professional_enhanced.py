@@ -55,13 +55,20 @@ dp = Dispatcher(storage=storage)
 # Initialize Pyrogram client for large file uploads (no 50MB limit)
 pyrogram_client = None
 if PYROGRAM_AVAILABLE and settings.PYROGRAM_APP_ID and settings.PYROGRAM_APP_HASH:
-    pyrogram_client = Client(
-        session_name=settings.PYROGRAM_SESSION_NAME,
-        api_id=int(settings.PYROGRAM_APP_ID),
-        api_hash=settings.PYROGRAM_APP_HASH,
-        no_updates=True,
-    )
-    logger.info("✅ Pyrogram client initialized (unlimited file uploads)")
+    try:
+        pyrogram_client = Client(
+            name=settings.PYROGRAM_SESSION_NAME,
+            api_id=int(settings.PYROGRAM_APP_ID),
+            api_hash=settings.PYROGRAM_APP_HASH,
+            no_updates=True,
+            workdir='.',  # Store session in current directory
+        )
+        logger.info("✅ Pyrogram client initialized (unlimited file uploads)")
+    except Exception as e:
+        logger.warning(f"⚠️ Pyrogram initialization failed: {e}, will use aiogram only")
+        pyrogram_client = None
+else:
+    logger.warning("⚠️ Pyrogram credentials not configured, using aiogram only")
 
 # Session storage for tracking download progress per user
 download_sessions: Dict[int, Dict[str, Any]] = {}

@@ -3,8 +3,10 @@
 import re
 import asyncio
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from config_simple import settings
 
@@ -17,6 +19,14 @@ try:
 except Exception as e:
     print(f"⚠️  Bot initialization failed: {e}")
     bot = None
+
+# ==================== STATES ====================
+
+class DownloadStates(StatesGroup):
+    """States for download process"""
+    waiting_for_youtube_url = State()
+    waiting_for_instagram_url = State()
+    waiting_for_twitter_url = State()
 
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
@@ -125,7 +135,7 @@ async def cmd_admin(message: Message):
         reply_markup=admin_menu_kb()
     )
 
-@dp.message()
+@dp.message(StateFilter(None))
 async def handle_message(message: Message):
     """Fallback handler"""
     await message.reply(
@@ -133,6 +143,79 @@ async def handle_message(message: Message):
         "برای دانلود: /download\n"
         "برای راهنما: /help"
     )
+
+# ==================== URL HANDLERS ====================
+
+@dp.message(DownloadStates.waiting_for_youtube_url)
+async def handle_youtube_url(message: Message, state: FSMContext):
+    """Handle YouTube URL"""
+    url = message.text
+    
+    # Basic YouTube URL validation
+    if "youtube.com" in url or "youtu.be" in url:
+        await message.reply(
+            "✅ **لینک دریافت شد!**\n\n"
+            f"URL: {url}\n\n"
+            "⏳ در حال دانلود...\n\n"
+            "⚠️ **نکته:** دریافت URL فعلاً فعال نیست\n"
+            "برای فعال‌سازی، API key لازم است"
+        )
+    else:
+        await message.reply(
+            "❌ **لینک نامعتبر**\n\n"
+            "لطفا لینک YouTube معتبر ارسال کنید:\n"
+            "• https://youtu.be/...\n"
+            "• https://youtube.com/watch?v=..."
+        )
+    
+    await state.clear()
+
+@dp.message(DownloadStates.waiting_for_instagram_url)
+async def handle_instagram_url(message: Message, state: FSMContext):
+    """Handle Instagram URL"""
+    url = message.text
+    
+    # Basic Instagram URL validation
+    if "instagram.com" in url:
+        await message.reply(
+            "✅ **لینک دریافت شد!**\n\n"
+            f"URL: {url}\n\n"
+            "⏳ در حال دانلود...\n\n"
+            "⚠️ **نکته:** دریافت URL فعلاً فعال نیست\n"
+            "برای فعال‌سازی، API key لازم است"
+        )
+    else:
+        await message.reply(
+            "❌ **لینک نامعتبر**\n\n"
+            "لطفا لینک Instagram معتبر ارسال کنید:\n"
+            "• https://instagram.com/p/..."
+        )
+    
+    await state.clear()
+
+@dp.message(DownloadStates.waiting_for_twitter_url)
+async def handle_twitter_url(message: Message, state: FSMContext):
+    """Handle Twitter URL"""
+    url = message.text
+    
+    # Basic Twitter URL validation
+    if "twitter.com" in url or "x.com" in url:
+        await message.reply(
+            "✅ **لینک دریافت شد!**\n\n"
+            f"URL: {url}\n\n"
+            "⏳ در حال دانلود...\n\n"
+            "⚠️ **نکته:** دریافت URL فعلاً فعال نیست\n"
+            "برای فعال‌سازی، API key لازم است"
+        )
+    else:
+        await message.reply(
+            "❌ **لینک نامعتبر**\n\n"
+            "لطفا لینک Twitter معتبر ارسال کنید:\n"
+            "• https://twitter.com/.../status/..."
+            "• https://x.com/.../status/..."
+        )
+    
+    await state.clear()
 
 # ==================== CALLBACK HANDLERS ====================
 
@@ -147,18 +230,21 @@ async def cb_download_menu(callback: CallbackQuery):
     await callback.answer()
 
 @dp.callback_query(F.data == "platform_youtube")
-async def cb_youtube(callback: CallbackQuery):
+async def cb_youtube(callback: CallbackQuery, state: FSMContext):
     """YouTube platform"""
+    await state.set_state(DownloadStates.waiting_for_youtube_url)
     await callback.message.edit_text(
         "🎥 **YouTube**\n\n"
         "لطفا لینک ویدیو را ارسال کنید:\n\n"
-        "مثال: https://youtu.be/..."
+        "مثال: https://youtu.be/...\n\n"
+        "یا: https://youtube.com/watch?v=..."
     )
     await callback.answer()
 
 @dp.callback_query(F.data == "platform_instagram")
-async def cb_instagram(callback: CallbackQuery):
+async def cb_instagram(callback: CallbackQuery, state: FSMContext):
     """Instagram platform"""
+    await state.set_state(DownloadStates.waiting_for_instagram_url)
     await callback.message.edit_text(
         "📸 **Instagram**\n\n"
         "لطفا لینک را ارسال کنید:\n\n"
@@ -167,8 +253,9 @@ async def cb_instagram(callback: CallbackQuery):
     await callback.answer()
 
 @dp.callback_query(F.data == "platform_twitter")
-async def cb_twitter(callback: CallbackQuery):
+async def cb_twitter(callback: CallbackQuery, state: FSMContext):
     """Twitter platform"""
+    await state.set_state(DownloadStates.waiting_for_twitter_url)
     await callback.message.edit_text(
         "🐦 **Twitter**\n\n"
         "لطفا لینک توییت را ارسال کنید:\n\n"

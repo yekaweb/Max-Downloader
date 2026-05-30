@@ -1,0 +1,121 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: dlbot_postgres
+    environment:
+      POSTGRES_DB: dlbot_db
+      POSTGRES_USER: dlbot_user
+      POSTGRES_PASSWORD: secure_password_here
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dlbot_user -d dlbot_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: dlbot_redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Celery Worker (optional - for async tasks)
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dlbot_celery_worker
+    command: celery -A tasks.celery_app worker -l info --concurrency=4
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+    volumes:
+      - .:/app
+      - temp_downloads:/app/temp_downloads
+      - cached_files:/app/cached_files
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Telegram Bot
+  dlbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dlbot_bot
+    command: python main.py
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      DB_HOST: postgres
+      DB_USER: dlbot_user
+      DB_PASSWORD: secure_password_here
+      DB_NAME: dlbot_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PYROGRAM_APP_ID: ${PYROGRAM_APP_ID}
+      PYROGRAM_APP_HASH: ${PYROGRAM_APP_HASH}
+    volumes:
+      - .:/app
+      - temp_downloads:/app/temp_downloads
+      - cached_files:/app/cached_files
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # FastAPI Web Admin Panel (optional)
+  web_panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dlbot_web_panel
+    command: uvicorn web.app:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  temp_downloads:
+  cached_files:
+
+networks:
+  default:
+    name: dlbot_network

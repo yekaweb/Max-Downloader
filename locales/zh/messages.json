@@ -1,0 +1,55 @@
+{
+  "greeting": "欢迎来到 DLBot 🤖",
+  "start_help": "请发送视频链接开始下载",
+  "language_select": "请选择语言:",
+  "language_changed": "✅ 语言已更改为中文",
+  
+  "download": {
+    "url_prompt": "请发送视频链接:",
+    "invalid_url": "❌ 无效的链接。请提供有效的链接。",
+    "format_select": "选择文件格式:",
+    "quality_select": "选择质量:",
+    "send_as_select": "选择发送方式:",
+    "subtitle_option": "您想添加字幕吗?",
+    "confirming": "✅ 确认或 ❌ 取消",
+    "progress_download": "⬇️ 正在下载...",
+    "progress_upload": "⬆️ 正在上传到 Telegram...",
+    "progress": "{icon} {title}\n[{bar}] {percent:.1f}%\n📦 {current:.1f} / {total:.1f} MB\n⚡ {speed:.2f} MB/s\n⏱ 剩余时间: {eta}",
+    "complete": "✅ 下载完成!",
+    "error": "❌ 下载错误: {error}",
+    "cancelled": "❌ 下载已取消"
+  },
+  
+  "referral": {
+    "invite_link": "🎁 您的邀请链接:\n{link}",
+    "referral_count": "👥 邀请人数: {count}",
+    "coins_earned": "💰 赚取的硬币: {coins}",
+    "milestone_reward": "🎉 恭喜! 您达到了 {level} 级!\n🎁 奖励: {reward_type}",
+    "badge": "🏅 徽章: {badge}",
+    "referral_used": "✅ 已使用 {referrer} 的邀请代码"
+  },
+  
+  "payment": {
+    "select_plan": "📋 选择计划:",
+    "plan_info": "💎 {plan_name}\n💵 价格: {price} {currency}\n⏱ 时长: {days} 天",
+    "checkout": "🛒 前往结账",
+    "payment_pending": "⏳ 等待支付确认...",
+    "payment_success": "✅ 支付已确认!",
+    "payment_failed": "❌ 支付失败: {error}",
+    "payment_cancelled": "❌ 支付已取消"
+  },
+  
+  "admin": {
+    "user_count": "👥 总用户数: {count}",
+    "daily_downloads": "📊 今日下载: {count}",
+    "revenue": "💰 收入: {amount} {currency}",
+    "broadcast_sent": "📢 消息已发送给 {count} 个用户"
+  },
+  
+  "error": {
+    "not_found": "❌ 未找到",
+    "access_denied": "❌ 拒绝访问",
+    "server_error": "❌ 服务器错误",
+    "try_again": "请重试"
+  }
+}

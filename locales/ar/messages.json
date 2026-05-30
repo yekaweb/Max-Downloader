@@ -1,0 +1,55 @@
+{
+  "greeting": "مرحبا! أهلا بك في DLBot 🤖",
+  "start_help": "يرجى إرسال رابط فيديو لبدء التنزيل",
+  "language_select": "يرجى اختيار اللغة:",
+  "language_changed": "✅ تم تغيير اللغة إلى العربية",
+  
+  "download": {
+    "url_prompt": "يرجى إرسال رابط الفيديو:",
+    "invalid_url": "❌ رابط غير صحيح. يرجى توفير رابط صحيح.",
+    "format_select": "اختر نوع الملف:",
+    "quality_select": "اختر الجودة:",
+    "send_as_select": "اختر طريقة الإرسال:",
+    "subtitle_option": "هل تريد إضافة ترجمات؟",
+    "confirming": "✅ تأكيد أو ❌ إلغاء",
+    "progress_download": "⬇️ جاري التنزيل...",
+    "progress_upload": "⬆️ جاري الرفع إلى تلغرام...",
+    "progress": "{icon} {title}\n[{bar}] {percent:.1f}%\n📦 {current:.1f} / {total:.1f} MB\n⚡ {speed:.2f} MB/s\n⏱ الوقت المتبقي: {eta}",
+    "complete": "✅ التنزيل مكتمل!",
+    "error": "❌ خطأ في التنزيل: {error}",
+    "cancelled": "❌ تم إلغاء التنزيل"
+  },
+  
+  "referral": {
+    "invite_link": "🎁 رابط الدعوة الخاص بك:\n{link}",
+    "referral_count": "👥 عدد المدعوين: {count}",
+    "coins_earned": "💰 العملات المكتسبة: {coins}",
+    "milestone_reward": "🎉 تهانينا! وصلت إلى المستوى {level}!\n🎁 المكافأة: {reward_type}",
+    "badge": "🏅 الشارة: {badge}",
+    "referral_used": "✅ تم استخدام كود الدعوة من {referrer}"
+  },
+  
+  "payment": {
+    "select_plan": "📋 اختر خطة:",
+    "plan_info": "💎 {plan_name}\n💵 السعر: {price} {currency}\n⏱ المدة: {days} أيام",
+    "checkout": "🛒 الذهاب إلى الدفع",
+    "payment_pending": "⏳ جاري انتظار تأكيد الدفع...",
+    "payment_success": "✅ تم تأكيد الدفع!",
+    "payment_failed": "❌ فشل الدفع: {error}",
+    "payment_cancelled": "❌ تم إلغاء الدفع"
+  },
+  
+  "admin": {
+    "user_count": "👥 إجمالي المستخدمين: {count}",
+    "daily_downloads": "📊 تنزيلات اليوم: {count}",
+    "revenue": "💰 الإيرادات: {amount} {currency}",
+    "broadcast_sent": "📢 تم إرسال الرسالة إلى {count} مستخدم"
+  },
+  
+  "error": {
+    "not_found": "❌ غير موجود",
+    "access_denied": "❌ تم رفض الوصول",
+    "server_error": "❌ خطأ في الخادم",
+    "try_again": "يرجى المحاولة مرة أخرى"
+  }
+}

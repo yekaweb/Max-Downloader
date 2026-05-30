@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLBot Admin - Coin Transactions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            color: #667eea;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        
+        .filter-group input,
+        .filter-group select {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .badge.earn {
+            background: #e8f8f5;
+            color: #00c896;
+        }
+        
+        .badge.spend {
+            background: #fde8e8;
+            color: #ff3333;
+        }
+        
+        .badge.bonus {
+            background: #e8eef8;
+            color: #667eea;
+        }
+        
+        .badge.referral {
+            background: #fff8e8;
+            color: #ff9800;
+        }
+        
+        .amount {
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        
+        .amount.positive {
+            color: #00c896;
+        }
+        
+        .amount.negative {
+            color: #ff3333;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .pagination button:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💰 Coin Transaction History</h1>
+            <p>Monitor all coin earnings, spending, and transfers</p>
+        </header>
+        
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total in Circulation</h3>
+                <div class="stat-value">428,450</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Earned</h3>
+                <div class="stat-value">652,300</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Spent</h3>
+                <div class="stat-value">223,850</div>
+            </div>
+            <div class="stat-card">
+                <h3>Today's Transactions</h3>
+                <div class="stat-value">342</div>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Transaction Type</label>
+                <select>
+                    <option>All</option>
+                    <option>Earn</option>
+                    <option>Spend</option>
+                    <option>Bonus</option>
+                    <option>Referral</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Date From</label>
+                <input type="date" value="2024-05-17">
+            </div>
+            <div class="filter-group">
+                <label>Date To</label>
+                <input type="date" value="2024-05-24">
+            </div>
+            <div class="filter-group">
+                <label>Min Amount</label>
+                <input type="number" placeholder="0">
+            </div>
+            <div class="filter-group">
+                <label>Max Amount</label>
+                <input type="number" placeholder="10000">
+            </div>
+        </div>
+        
+        <!-- Transactions Table -->
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>User</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Balance After</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>2024-05-24 14:32</td>
+                        <td>@johndoe (123456)</td>
+                        <td><span class="badge earn">Earn</span></td>
+                        <td class="amount positive">+50</td>
+                        <td>Referral reward (User #789012)</td>
+                        <td>450</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-24 14:28</td>
+                        <td>@alice_wonder (789012)</td>
+                        <td><span class="badge spend">Spend</span></td>
+                        <td class="amount negative">-100</td>
+                        <td>Convert to 1 month Premium subscription</td>
+                        <td>720</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-24 14:15</td>
+                        <td>@bobsmith (345678)</td>
+                        <td><span class="badge earn">Earn</span></td>
+                        <td class="amount positive">+20</td>
+                        <td>Download reward (200MB file)</td>
+                        <td>140</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-24 13:50</td>
+                        <td>@charlie_dev (901234)</td>
+                        <td><span class="badge bonus">Bonus</span></td>
+                        <td class="amount positive">+100</td>
+                        <td>Admin bonus award - Special promotion</td>
+                        <td>2,550</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-24 13:42</td>
+                        <td>@emily_tech (567890)</td>
+                        <td><span class="badge earn">Earn</span></td>
+                        <td class="amount positive">+100</td>
+                        <td>Registration bonus</td>
+                        <td>100</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-24 12:30</td>
+                        <td>@crypto_master (111111)</td>
+                        <td><span class="badge referral">Referral</span></td>
+                        <td class="amount positive">+50</td>
+                        <td>Referral signup bonus</td>
+                        <td>2,450</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-24 11:15</td>
+                        <td>@video_enthusiast (222222)</td>
+                        <td><span class="badge spend">Spend</span></td>
+                        <td class="amount negative">-150</td>
+                        <td>Convert to 3 month VIP subscription</td>
+                        <td>1,890</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-24 10:00</td>
+                        <td>@social_butterfly (333333)</td>
+                        <td><span class="badge earn">Earn</span></td>
+                        <td class="amount positive">+45</td>
+                        <td>Download reward (450MB file)</td>
+                        <td>1,650</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-23 22:45</td>
+                        <td>@media_collector (444444)</td>
+                        <td><span class="badge earn">Earn</span></td>
+                        <td class="amount positive">+15</td>
+                        <td>Download reward (150MB file)</td>
+                        <td>1,420</td>
+                        <td>✅ Success</td>
+                    </tr>
+                    <tr>
+                        <td>2024-05-23 20:30</td>
+                        <td>@downloader_pro (555555)</td>
+                        <td><span class="badge bonus">Bonus</span></td>
+                        <td class="amount positive">+50</td>
+                        <td>Admin bonus - Loyalty reward</td>
+                        <td>1,280</td>
+                        <td>✅ Success</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="pagination">
+            <button>« Previous</button>
+            <button class="active">1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>4</button>
+            <button>5</button>
+            <button>Next »</button>
+        </div>
+    </div>
+</body>
+</html>

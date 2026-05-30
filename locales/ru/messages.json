@@ -1,0 +1,55 @@
+{
+  "greeting": "Привет! Добро пожаловать в DLBot 🤖",
+  "start_help": "Пожалуйста, отправьте ссылку на видео для начала загрузки",
+  "language_select": "Пожалуйста, выберите язык:",
+  "language_changed": "✅ Язык изменён на русский",
+  
+  "download": {
+    "url_prompt": "Пожалуйста, отправьте ссылку на видео:",
+    "invalid_url": "❌ Неверная ссылка. Пожалуйста, предоставьте действительную ссылку.",
+    "format_select": "Выберите формат файла:",
+    "quality_select": "Выберите качество:",
+    "send_as_select": "Выберите способ отправки:",
+    "subtitle_option": "Хотите ли вы добавить субтитры?",
+    "confirming": "✅ Подтвердить или ❌ Отмена",
+    "progress_download": "⬇️ Загрузка...",
+    "progress_upload": "⬆️ Загрузка в Telegram...",
+    "progress": "{icon} {title}\n[{bar}] {percent:.1f}%\n📦 {current:.1f} / {total:.1f} МБ\n⚡ {speed:.2f} МБ/с\n⏱ Осталось: {eta}",
+    "complete": "✅ Загрузка завершена!",
+    "error": "❌ Ошибка загрузки: {error}",
+    "cancelled": "❌ Загрузка отменена"
+  },
+  
+  "referral": {
+    "invite_link": "🎁 Ваша реферальная ссылка:\n{link}",
+    "referral_count": "👥 Приглашено: {count}",
+    "coins_earned": "💰 Заработано монет: {coins}",
+    "milestone_reward": "🎉 Поздравляем! Вы достигли уровня {level}!\n🎁 Награда: {reward_type}",
+    "badge": "🏅 Значок: {badge}",
+    "referral_used": "✅ Использован реферальный код от {referrer}"
+  },
+  
+  "payment": {
+    "select_plan": "📋 Выберите план:",
+    "plan_info": "💎 {plan_name}\n💵 Цена: {price} {currency}\n⏱ Продолжительность: {days} дней",
+    "checkout": "🛒 Перейти к оплате",
+    "payment_pending": "⏳ Ожидание подтверждения платежа...",
+    "payment_success": "✅ Платёж подтвержден!",
+    "payment_failed": "❌ Ошибка платежа: {error}",
+    "payment_cancelled": "❌ Платёж отменен"
+  },
+  
+  "admin": {
+    "user_count": "👥 Всего пользователей: {count}",
+    "daily_downloads": "📊 Загрузок сегодня: {count}",
+    "revenue": "💰 Доход: {amount} {currency}",
+    "broadcast_sent": "📢 Сообщение отправлено {count} пользователям"
+  },
+  
+  "error": {
+    "not_found": "❌ Не найдено",
+    "access_denied": "❌ Доступ запрещен",
+    "server_error": "❌ Ошибка сервера",
+    "try_again": "Пожалуйста, попробуйте снова"
+  }
+}

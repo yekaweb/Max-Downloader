@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLBot Admin - Broadcast History</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        header h1 {
+            margin-bottom: 10px;
+        }
+        
+        .action-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-primary {
+            background: white;
+            color: #667eea;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #888;
+            font-size: 0.9em;
+        }
+        
+        .broadcasts-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .broadcast-item {
+            border-bottom: 1px solid #eee;
+            padding: 20px;
+            transition: background 0.3s ease;
+        }
+        
+        .broadcast-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .broadcast-item:last-child {
+            border-bottom: none;
+        }
+        
+        .broadcast-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+        
+        .broadcast-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+        
+        .broadcast-status {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .status-completed {
+            background: #e8f8f5;
+            color: #00c896;
+        }
+        
+        .status-pending {
+            background: #fef8e8;
+            color: #ffa500;
+        }
+        
+        .status-failed {
+            background: #fde8e8;
+            color: #ff3333;
+        }
+        
+        .status-scheduled {
+            background: #e8eef8;
+            color: #667eea;
+        }
+        
+        .broadcast-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .meta-item {
+            font-size: 0.95em;
+        }
+        
+        .meta-label {
+            color: #667eea;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 3px;
+        }
+        
+        .meta-value {
+            color: #333;
+        }
+        
+        .broadcast-message {
+            background: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            border-radius: 3px;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+        
+        .broadcast-progress {
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar {
+            background: #e0e0e0;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 98%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            font-size: 0.85em;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .broadcast-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-view {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-view:hover {
+            background: #5568d3;
+        }
+        
+        .btn-retry {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .btn-retry:hover {
+            background: #f57c00;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .pagination button:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📢 Broadcast History</h1>
+            <p>Track all broadcast campaigns and delivery status</p>
+        </header>
+        
+        <div class="action-bar">
+            <button class="btn-primary">+ Create New Broadcast</button>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">42</div>
+                <div class="stat-label">Total Broadcasts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">118,450</div>
+                <div class="stat-label">Total Sent</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">99.2%</div>
+                <div class="stat-label">Delivery Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">3</div>
+                <div class="stat-label">Pending</div>
+            </div>
+        </div>
+        
+        <!-- Broadcasts List -->
+        <div class="broadcasts-container">
+            <!-- Broadcast 1 - Completed -->
+            <div class="broadcast-item">
+                <div class="broadcast-header">
+                    <div class="broadcast-title">🎉 New Year Special Offer - 50% Discount</div>
+                    <span class="broadcast-status status-completed">✓ Completed</span>
+                </div>
+                <div class="broadcast-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Sent At:</span>
+                        <span class="meta-value">2024-05-24 10:00:00</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Target:</span>
+                        <span class="meta-value">All Users (2,847)</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Delivery Rate:</span>
+                        <span class="meta-value">2,801 / 2,847 (98.4%)</span>
+                    </div>
+                </div>
+                <div class="broadcast-message">
+                    "🎉 Happy New Year! Get 50% off on Premium subscription this month only! Use code: NEWYEAR50. Download more, save more!"
+                </div>
+                <div class="broadcast-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 100%;"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span>Delivered: 2,801/2,847</span>
+                        <span>Failed: 46</span>
+                    </div>
+                </div>
+                <div class="broadcast-actions">
+                    <button class="btn-small btn-view">View Details</button>
+                </div>
+            </div>
+            
+            <!-- Broadcast 2 - Pending -->
+            <div class="broadcast-item">
+                <div class="broadcast-header">
+                    <div class="broadcast-title">⏰ System Maintenance Notice</div>
+                    <span class="broadcast-status status-pending">⏱ Scheduled</span>
+                </div>
+                <div class="broadcast-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Scheduled For:</span>
+                        <span class="meta-value">2024-05-25 02:00:00</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Target:</span>
+                        <span class="meta-value">Premium Users (312)</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Status:</span>
+                        <span class="meta-value">Awaiting Execution</span>
+                    </div>
+                </div>
+                <div class="broadcast-message">
+                    "🔧 Scheduled maintenance on 2024-05-25 02:00-04:00 UTC. The service will be temporarily unavailable. Thank you for your patience!"
+                </div>
+            </div>
+            
+            <!-- Broadcast 3 - Completed -->
+            <div class="broadcast-item">
+                <div class="broadcast-header">
+                    <div class="broadcast-title">🎁 Referral Bonus Campaign</div>
+                    <span class="broadcast-status status-completed">✓ Completed</span>
+                </div>
+                <div class="broadcast-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Sent At:</span>
+                        <span class="meta-value">2024-05-20 14:30:00</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Target:</span>
+                        <span class="meta-value">Free Users (2,535)</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Delivery Rate:</span>
+                        <span class="meta-value">2,487 / 2,535 (98.1%)</span>
+                    </div>
+                </div>
+                <div class="broadcast-message">
+                    "👥 Invite your friends and earn 50 coins per successful referral! Share your unique code and start earning today!"
+                </div>
+                <div class="broadcast-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 100%;"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span>Delivered: 2,487/2,535</span>
+                        <span>Failed: 48</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Broadcast 4 - Failed -->
+            <div class="broadcast-item">
+                <div class="broadcast-header">
+                    <div class="broadcast-title">⚠️ Service Update Announcement</div>
+                    <span class="broadcast-status status-failed">✗ Failed</span>
+                </div>
+                <div class="broadcast-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Sent At:</span>
+                        <span class="meta-value">2024-05-18 09:15:00</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Target:</span>
+                        <span class="meta-value">All Users (2,847)</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Delivery Rate:</span>
+                        <span class="meta-value">156 / 2,847 (5.5%)</span>
+                    </div>
+                </div>
+                <div class="broadcast-message">
+                    "📣 We've added Instagram and TikTok support! Download your favorite content from more platforms now!"
+                </div>
+                <div class="broadcast-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 5.5%;"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span>Delivered: 156/2,847</span>
+                        <span>Failed: 2,691</span>
+                    </div>
+                </div>
+                <div class="broadcast-actions">
+                    <button class="btn-small btn-retry">Retry</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="pagination">
+            <button>« Previous</button>
+            <button class="active">1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>Next »</button>
+        </div>
+    </div>
+</body>
+</html>

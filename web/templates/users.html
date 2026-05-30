@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLBot Admin - User Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        
+        .filter-group input,
+        .filter-group select {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+        
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .badge.active {
+            background: #e8f8f5;
+            color: #00c896;
+        }
+        
+        .badge.inactive {
+            background: #fef8e8;
+            color: #ffa500;
+        }
+        
+        .badge.premium {
+            background: #fde8e8;
+            color: #ff3333;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-edit {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-edit:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        
+        .btn-ban {
+            background: #ff3333;
+            color: white;
+        }
+        
+        .btn-ban:hover {
+            background: #e61c1c;
+            transform: translateY(-2px);
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .pagination button:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #888;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👥 User Management Dashboard</h1>
+            <p>View and manage all registered users</p>
+        </header>
+        
+        <!-- Statistics -->
+        <div class="stats-bar">
+            <div class="stat-box">
+                <div class="stat-value">2,847</div>
+                <div class="stat-label">Total Users</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">312</div>
+                <div class="stat-label">Premium Users</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">2,535</div>
+                <div class="stat-label">Free Users</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">35</div>
+                <div class="stat-label">Banned Users</div>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Search</label>
+                <input type="text" placeholder="Username or ID">
+            </div>
+            <div class="filter-group">
+                <label>Status</label>
+                <select>
+                    <option>All</option>
+                    <option>Active</option>
+                    <option>Inactive</option>
+                    <option>Banned</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Plan</label>
+                <select>
+                    <option>All</option>
+                    <option>Free</option>
+                    <option>Premium</option>
+                    <option>VIP</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Registration Date</label>
+                <input type="date">
+            </div>
+        </div>
+        
+        <!-- Users Table -->
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Username</th>
+                        <th>Plan</th>
+                        <th>Downloads</th>
+                        <th>Coins</th>
+                        <th>Registered</th>
+                        <th>Last Active</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>123456</td>
+                        <td>@johndoe</td>
+                        <td>Premium</td>
+                        <td>156</td>
+                        <td>450</td>
+                        <td>2024-01-15</td>
+                        <td>2024-05-24 14:30</td>
+                        <td><span class="badge active">Active</span></td>
+                        <td class="actions">
+                            <button class="btn btn-edit">Edit</button>
+                            <button class="btn btn-ban">Ban</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>789012</td>
+                        <td>@alice_wonder</td>
+                        <td>Premium</td>
+                        <td>243</td>
+                        <td>820</td>
+                        <td>2024-02-03</td>
+                        <td>2024-05-23 22:15</td>
+                        <td><span class="badge active">Active</span></td>
+                        <td class="actions">
+                            <button class="btn btn-edit">Edit</button>
+                            <button class="btn btn-ban">Ban</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>345678</td>
+                        <td>@bobsmith</td>
+                        <td>Free</td>
+                        <td>34</td>
+                        <td>120</td>
+                        <td>2024-03-10</td>
+                        <td>2024-05-10 09:20</td>
+                        <td><span class="badge inactive">Inactive</span></td>
+                        <td class="actions">
+                            <button class="btn btn-edit">Edit</button>
+                            <button class="btn btn-ban">Ban</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>901234</td>
+                        <td>@charlie_dev</td>
+                        <td>VIP</td>
+                        <td>612</td>
+                        <td>2450</td>
+                        <td>2024-01-05</td>
+                        <td>2024-05-24 18:45</td>
+                        <td><span class="badge active">Active</span></td>
+                        <td class="actions">
+                            <button class="btn btn-edit">Edit</button>
+                            <button class="btn btn-ban">Ban</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>567890</td>
+                        <td>@emily_tech</td>
+                        <td>Premium</td>
+                        <td>89</td>
+                        <td>340</td>
+                        <td>2024-04-20</td>
+                        <td>2024-05-24 16:10</td>
+                        <td><span class="badge active">Active</span></td>
+                        <td class="actions">
+                            <button class="btn btn-edit">Edit</button>
+                            <button class="btn btn-ban">Ban</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>234567</td>
+                        <td>@frank_spam</td>
+                        <td>Free</td>
+                        <td>2</td>
+                        <td>0</td>
+                        <td>2024-05-20</td>
+                        <td>2024-05-20 12:00</td>
+                        <td><span class="badge premium">Banned</span></td>
+                        <td class="actions">
+                            <button class="btn btn-edit">Edit</button>
+                            <button class="btn btn-ban">Ban</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="pagination">
+            <button>« Previous</button>
+            <button class="active">1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>4</button>
+            <button>5</button>
+            <button>Next »</button>
+        </div>
+    </div>
+</body>
+</html>

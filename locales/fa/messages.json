@@ -1,0 +1,55 @@
+{
+  "greeting": "سلام! به DLBot خوش آمدید 🤖",
+  "start_help": "لطفاً یک لینک ویدیو را ارسال کنید تا دانلود شروع شود",
+  "language_select": "لطفاً زبان خود را انتخاب کنید:",
+  "language_changed": "✅ زبان به فارسی تغییر کرد",
+  
+  "download": {
+    "url_prompt": "لطفاً لینک ویدیو را ارسال کنید:",
+    "invalid_url": "❌ لینک نامعتبر است. لطفاً لینک درستی وارد کنید.",
+    "format_select": "نوع فایل را انتخاب کنید:",
+    "quality_select": "کیفیت را انتخاب کنید:",
+    "send_as_select": "روش ارسال را انتخاب کنید:",
+    "subtitle_option": "آیا می‌خواهید زیرنویس اضافه کنید؟",
+    "confirming": "✅ تأیید کنید یا ❌ لغو کنید",
+    "progress_download": "⬇️ در حال دانلود...",
+    "progress_upload": "⬆️ در حال ارسال به تلگرام...",
+    "progress": "{icon} {title}\n[{bar}] {percent:.1f}%\n📦 {current:.1f} / {total:.1f} MB\n⚡ {speed:.2f} MB/s\n⏱ {eta}",
+    "complete": "✅ دانلود تکمیل شد!",
+    "error": "❌ خطای دانلود: {error}",
+    "cancelled": "❌ دانلود لغو شد"
+  },
+  
+  "referral": {
+    "invite_link": "🎁 لینک دعوت‌شما:\n{link}",
+    "referral_count": "👥 تعداد دعوت‌شدگان: {count}",
+    "coins_earned": "💰 سکه‌های کسب‌شده: {coins}",
+    "milestone_reward": "🎉 جشن! شما به سطح {level} رسیدید!\n🎁 پاداش: {reward_type}",
+    "badge": "🏅 نشان: {badge}",
+    "referral_used": "✅ کد دعوت {referrer} استفاده شد"
+  },
+  
+  "payment": {
+    "select_plan": "📋 یک پلن را انتخاب کنید:",
+    "plan_info": "💎 {plan_name}\n💵 قیمت: {price} {currency}\n⏱ مدت: {days} روز",
+    "checkout": "🛒 به سمت پرداخت بروید",
+    "payment_pending": "⏳ در حال انتظار تأیید پرداخت...",
+    "payment_success": "✅ پرداخت تأیید شد!",
+    "payment_failed": "❌ پرداخت ناموفق: {error}",
+    "payment_cancelled": "❌ پرداخت لغو شد"
+  },
+  
+  "admin": {
+    "user_count": "👥 تعداد کاربران: {count}",
+    "daily_downloads": "📊 دانلودهای امروز: {count}",
+    "revenue": "💰 درآمد: {amount} {currency}",
+    "broadcast_sent": "📢 پیام برای {count} کاربر ارسال شد"
+  },
+  
+  "error": {
+    "not_found": "❌ موجود نیست",
+    "access_denied": "❌ دسترسی رد شد",
+    "server_error": "❌ خطای سرور",
+    "try_again": "لطفاً دوباره تلاش کنید"
+  }
+}

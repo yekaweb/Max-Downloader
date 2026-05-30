@@ -1,0 +1,55 @@
+{
+  "greeting": "Hello! Welcome to DLBot 🤖",
+  "start_help": "Please send a video link to start downloading",
+  "language_select": "Please select your language:",
+  "language_changed": "✅ Language changed to English",
+  
+  "download": {
+    "url_prompt": "Please send the video link:",
+    "invalid_url": "❌ Invalid URL. Please provide a valid link.",
+    "format_select": "Select file type:",
+    "quality_select": "Select quality:",
+    "send_as_select": "Select how to send:",
+    "subtitle_option": "Would you like to add subtitles?",
+    "confirming": "✅ Confirm or ❌ Cancel",
+    "progress_download": "⬇️ Downloading...",
+    "progress_upload": "⬆️ Uploading to Telegram...",
+    "progress": "{icon} {title}\n[{bar}] {percent:.1f}%\n📦 {current:.1f} / {total:.1f} MB\n⚡ {speed:.2f} MB/s\n⏱ ETA: {eta}",
+    "complete": "✅ Download complete!",
+    "error": "❌ Download error: {error}",
+    "cancelled": "❌ Download cancelled"
+  },
+  
+  "referral": {
+    "invite_link": "🎁 Your invite link:\n{link}",
+    "referral_count": "👥 Referrals: {count}",
+    "coins_earned": "💰 Coins earned: {coins}",
+    "milestone_reward": "🎉 Congratulations! You reached level {level}!\n🎁 Reward: {reward_type}",
+    "badge": "🏅 Badge: {badge}",
+    "referral_used": "✅ Referral code from {referrer} used"
+  },
+  
+  "payment": {
+    "select_plan": "📋 Select a plan:",
+    "plan_info": "💎 {plan_name}\n💵 Price: {price} {currency}\n⏱ Duration: {days} days",
+    "checkout": "🛒 Proceed to checkout",
+    "payment_pending": "⏳ Waiting for payment confirmation...",
+    "payment_success": "✅ Payment confirmed!",
+    "payment_failed": "❌ Payment failed: {error}",
+    "payment_cancelled": "❌ Payment cancelled"
+  },
+  
+  "admin": {
+    "user_count": "👥 Total users: {count}",
+    "daily_downloads": "📊 Today's downloads: {count}",
+    "revenue": "💰 Revenue: {amount} {currency}",
+    "broadcast_sent": "📢 Message sent to {count} users"
+  },
+  
+  "error": {
+    "not_found": "❌ Not found",
+    "access_denied": "❌ Access denied",
+    "server_error": "❌ Server error",
+    "try_again": "Please try again"
+  }
+}

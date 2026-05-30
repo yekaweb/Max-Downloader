@@ -1,0 +1,82 @@
+{
+  "start": {
+    "title": "🤖 سلام به DLBot!",
+    "description": "من ربات دانلود حرفه‌ای برای:\n• 🎥 YouTube\n• 📸 Instagram\n• 🐦 Twitter\n\nبرای شروع دکمه پایین را بزن!",
+    "button_download": "📥 دانلود ویدیو",
+    "button_guide": "📚 راهنما"
+  },
+  "help": {
+    "title": "📖 دستورات موجود",
+    "commands": "/start - شروع\n/help - کمک\n/download - دانلود ویدیو\n/profile - نمایش پروفایل\n/settings - تنظیمات\n/admin - پنل ادمین (فقط برای مدیر)",
+    "button_download": "📥 شروع دانلود"
+  },
+  "download": {
+    "title": "📥 دانلود ویدیو",
+    "description": "کدام پلتفرم را انتخاب می‌کنید؟",
+    "youtube": "🎥 YouTube",
+    "instagram": "📸 Instagram",
+    "twitter": "🐦 Twitter",
+    "enter_url": "لطفا لینک ویدیو را ارسال کنید:",
+    "downloading": "⏳ درحال دانلود...",
+    "success": "✅ دانلود موفق!",
+    "error": "❌ خطا در دانلود. لطفا دوباره سعی کنید.",
+    "invalid_url": "❌ لینک نامعتبر است.",
+    "processing": "⏳ درحال پردازش...",
+    "uploading": "📤 درحال آپلود به تلگرام...",
+    "completed": "✅ ویدیو به شما ارسال شد!"
+  },
+  "profile": {
+    "title": "👤 پروفایل شما",
+    "user_id": "آیدی کاربری",
+    "downloads": "تعداد دانلودها",
+    "joined": "تاریخ عضویت",
+    "language": "زبان",
+    "premium": "وضعیت: "
+  },
+  "admin": {
+    "title": "⚙️ پنل مدیریت",
+    "not_admin": "❌ شما مدیر نیستید!",
+    "stats": {
+      "title": "📊 آمار",
+      "total_users": "کل کاربران",
+      "active_users": "کاربران فعال",
+      "total_downloads": "کل دانلودها",
+      "today_downloads": "دانلودهای امروز"
+    },
+    "broadcast": {
+      "title": "📢 ارسال پیام عمومی",
+      "send_message": "پیام خود را ارسال کنید:",
+      "sending": "⏳ درحال ارسال...",
+      "completed": "✅ پیام ارسال شد!"
+    },
+    "users": {
+      "title": "👥 مدیریت کاربران",
+      "list": "فهرست کاربران"
+    }
+  },
+  "guide": {
+    "title": "📚 راهنمای استفاده",
+    "user_guide": "**راهنمای کاربر:**\n\n1️⃣ دکمه 'دانلود ویدیو' را بزنید\n2️⃣ پلتفرم را انتخاب کنید (YouTube, Instagram, Twitter)\n3️⃣ لینک ویدیو را ارسال کنید\n4️⃣ منتظر دانلود باشید\n5️⃣ ویدیو به شما ارسال می‌شود\n\n⚠️ توجه: فقط لینک‌های عمومی را دانلود کنید.",
+    "admin_guide": "**راهنمای مدیر:**\n\n/admin - ورود به پنل\n- 📊 آمار: مشاهده آمار\n- 📢 Broadcast: ارسال پیام عمومی\n- 👥 کاربران: مدیریت کاربران"
+  },
+  "about": {
+    "title": "ℹ️ درباره DLBot",
+    "version": "نسخه 1.0.0",
+    "description": "ربات حرفه‌ای برای دانلود ویدیو و محتوا از پلتفرم‌های مختلف.",
+    "features": "✨ ویژگی‌ها:\n• دانلود از YouTube, Instagram, Twitter\n• سرعت بالا\n• کیفیت بالا\n• رابط کاربری آسان\n• پنل مدیریت",
+    "support": "💬 پشتیبانی: @yekaweb"
+  },
+  "errors": {
+    "general": "❌ خطایی رخ داد. لطفا دوباره سعی کنید.",
+    "timeout": "⏱️ زمان مجاز برای دانلود پایان یافت.",
+    "not_found": "🔍 ویدیو یافت نشد.",
+    "too_large": "📦 فایل بسیار بزرگ است.",
+    "invalid_format": "📋 فرمت نامعتبر است."
+  },
+  "settings": {
+    "title": "⚙️ تنظیمات",
+    "language": "🌐 زبان",
+    "notifications": "🔔 اطلاع‌رسانی",
+    "privacy": "🔒 حریم خصوصی"
+  }
+}

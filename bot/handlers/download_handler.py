@@ -32,6 +32,18 @@ async def cmd_download(message: Message):
     )
 
 
+@router.callback_query(F.data == "download_menu")
+async def download_menu(callback: CallbackQuery):
+    """منوی دانلود"""
+    desc = i18n.get("download.description")
+    
+    await callback.message.edit_text(
+        f"📥 **دانلود ویدیو**\n\n{desc}",
+        reply_markup=download_platform_kb()
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "platform_youtube")
 async def handle_youtube(callback: CallbackQuery):
     """YouTube platform selected"""

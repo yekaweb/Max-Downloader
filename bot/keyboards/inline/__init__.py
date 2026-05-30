@@ -62,7 +62,7 @@ def download_platform_kb() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🔙 بازگشت",
+                    text="🔙 بازگشت به منوی اصلی",
                     callback_data="back_main"
                 )
             ]
@@ -83,7 +83,7 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="📢 broadcast",
+                    text="📢 Broadcast",
                     callback_data="admin_broadcast"
                 )
             ],
@@ -95,7 +95,7 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🔙 بازگشت",
+                    text="🔙 بازگشت به منوی اصلی",
                     callback_data="back_main"
                 )
             ]

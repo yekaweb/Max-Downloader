@@ -44,10 +44,10 @@ async def main():
     
     # Import bot components (lazy import)
     try:
-        from bot.loader_fsm_complete_fixed import bot, dp
+        from bot.loader_final_fixed import bot, dp
         if not bot or not dp:
             raise ImportError("Bot or Dispatcher initialization failed")
-        logger.info("✅ Bot components loaded successfully (FSM + Exact Sizes + Cache System)")
+        logger.info("✅ Bot components loaded successfully (Working Version)")
     except ImportError as e:
         logger.error(f"❌ Failed to load bot components: {e}")
         return

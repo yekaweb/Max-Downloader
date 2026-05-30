@@ -85,6 +85,8 @@ def clear_session(user_id: int):
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     """Start command"""
+    from bot.keyboards.inline import main_menu_kb
+    
     await message.answer(
         "🤖 **سلام به DLBot!**\n\n"
         "دانلود‌کننده حرفه‌ای برای:\n"
@@ -92,7 +94,8 @@ async def cmd_start(message: Message):
         "• 📸 Instagram\n"
         "• 🐦 Twitter/X\n"
         "• 🎵 TikTok\n\n"
-        "شروع کنید: /download",
+        "برای شروع دانلود، دکمه‌ی زیر را بزنید:",
+        reply_markup=main_menu_kb()
     )
 
 
@@ -104,7 +107,8 @@ async def cmd_download(message: Message, state: FSMContext):
         "لطفاً لینک ویدیو ارسال کنید:\n\n"
         "مثال‌ها:\n"
         "• https://youtu.be/...\n"
-        "• https://instagram.com/p/..."
+        "• https://instagram.com/p/...",
+        reply_markup=get_format_type_keyboard()
     )
     await state.set_state(DownloadStates.waiting_for_url)
 
@@ -359,6 +363,32 @@ async def on_cancel(query: CallbackQuery, state: FSMContext):
     await query.message.delete()
     await query.answer("✅ لغو شد")
     await state.clear()
+
+
+@dp.callback_query(F.data == "download_menu")
+async def on_download_menu(query: CallbackQuery):
+    """Download menu - show platform selection"""
+    from bot.keyboards.inline import download_platform_kb
+    
+    await query.message.edit_text(
+        "📥 **دانلود فایل**\n\n"
+        "پلتفرمی را انتخاب کنید که می‌خواهید از آن دانلود کنید:",
+        reply_markup=download_platform_kb()
+    )
+    await query.answer()
+
+
+@dp.callback_query(F.data.startswith("platform_"))
+async def on_platform_select(query: CallbackQuery, state: FSMContext):
+    """Platform selected"""
+    platform = query.data.replace("platform_", "")
+    
+    await query.message.edit_text(
+        f"📥 **دانلود از {platform.upper()}**\n\n"
+        f"لطفاً لینک ویدیو ارسال کنید:"
+    )
+    await state.set_state(DownloadStates.waiting_for_url)
+    await query.answer()
 
 
 # ==================== FORMAT TYPE ====================

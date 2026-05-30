@@ -9,7 +9,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from config_simple import settings
 
 try:
@@ -174,8 +174,7 @@ async def handle_youtube_url(message: Message, state: FSMContext):
     if not YTDLP_AVAILABLE:
         await message.reply(
             "❌ **خطا**\n\n"
-            "yt-dlp بر روی سرور نصب نیست\n"
-            "لطفا ابتدا: pip install yt-dlp"
+            "yt-dlp بر روی سرور نصب نیست"
         )
         await state.clear()
         return
@@ -195,32 +194,30 @@ async def handle_youtube_url(message: Message, state: FSMContext):
         ydl_opts = {
             'format': 'best[ext=mp4]',
             'outtmpl': str(temp_dir / '%(title)s.%(ext)s'),
-            'quiet': False,
-            'no_warnings': False,
+            'quiet': True,
+            'no_warnings': True,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
         
-        # Send the file
+        # Get file size
         file_size = os.path.getsize(filename)
         file_size_mb = file_size / (1024 * 1024)
         
-        if file_size > 50 * 1024 * 1024:  # 50 MB limit for Telegram
-            await processing_msg.delete()
+        # Check size limit (50 MB for Telegram)
+        if file_size > 50 * 1024 * 1024:
+            # Delete processing message
+            try:
+                await processing_msg.delete()
+            except:
+                pass
+            
             await message.reply(
                 f"❌ **فایل بیش از حد بزرگ است**\n\n"
                 f"اندازه: {file_size_mb:.1f} MB\n"
                 "حد مجاز: 50 MB"
-            )
-        else:
-            # Delete processing message and send file
-            await processing_msg.delete()
-            
-            await message.reply_document(
-                open(filename, 'rb'),
-                caption=f"✅ **دانلود موفق!**\n\n📹 {info.get('title', 'Video')}\n💾 {file_size_mb:.1f} MB"
             )
             
             # Cleanup
@@ -228,9 +225,37 @@ async def handle_youtube_url(message: Message, state: FSMContext):
                 os.remove(filename)
             except:
                 pass
+        else:
+            # Send the file using FSInputFile
+            try:
+                await message.reply_document(
+                    FSInputFile(filename),
+                    caption=f"✅ **دانلود موفق!**\n\n"
+                           f"📹 {info.get('title', 'Video')}\n"
+                           f"💾 {file_size_mb:.1f} MB"
+                )
+            except Exception as e:
+                await message.reply(f"❌ خطا در ارسال: {str(e)[:50]}")
+            
+            # Delete processing message
+            try:
+                await processing_msg.delete()
+            except:
+                pass
+            
+            # Cleanup temp file
+            try:
+                os.remove(filename)
+            except:
+                pass
     
     except Exception as e:
-        await processing_msg.delete()
+        # Delete processing message safely
+        try:
+            await processing_msg.delete()
+        except:
+            pass
+        
         await message.reply(
             f"❌ **خطا در دانلود**\n\n"
             f"مشکل: {str(e)[:100]}"
@@ -272,7 +297,8 @@ async def handle_instagram_url(message: Message, state: FSMContext):
         ydl_opts = {
             'format': 'best',
             'outtmpl': str(temp_dir / '%(title)s.%(ext)s'),
-            'quiet': False,
+            'quiet': True,
+            'no_warnings': True,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -283,24 +309,45 @@ async def handle_instagram_url(message: Message, state: FSMContext):
         file_size_mb = file_size / (1024 * 1024)
         
         if file_size > 50 * 1024 * 1024:
-            await processing_msg.delete()
+            try:
+                await processing_msg.delete()
+            except:
+                pass
+            
             await message.reply(
                 f"❌ فایل بیش از حد بزرگ: {file_size_mb:.1f} MB\n"
                 "حد مجاز: 50 MB"
             )
+            
+            try:
+                os.remove(filename)
+            except:
+                pass
         else:
-            await processing_msg.delete()
-            await message.reply_document(
-                open(filename, 'rb'),
-                caption=f"✅ **دانلود موفق!** 📸\n💾 {file_size_mb:.1f} MB"
-            )
+            try:
+                await message.reply_document(
+                    FSInputFile(filename),
+                    caption=f"✅ **دانلود موفق!** 📸\n💾 {file_size_mb:.1f} MB"
+                )
+            except Exception as e:
+                await message.reply(f"❌ خطا در ارسال: {str(e)[:50]}")
+            
+            try:
+                await processing_msg.delete()
+            except:
+                pass
+            
             try:
                 os.remove(filename)
             except:
                 pass
     
     except Exception as e:
-        await processing_msg.delete()
+        try:
+            await processing_msg.delete()
+        except:
+            pass
+        
         await message.reply(f"❌ خطا: {str(e)[:100]}")
     
     await state.clear()
@@ -336,7 +383,8 @@ async def handle_twitter_url(message: Message, state: FSMContext):
         ydl_opts = {
             'format': 'best',
             'outtmpl': str(temp_dir / '%(title)s.%(ext)s'),
-            'quiet': False,
+            'quiet': True,
+            'no_warnings': True,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -347,23 +395,44 @@ async def handle_twitter_url(message: Message, state: FSMContext):
         file_size_mb = file_size / (1024 * 1024)
         
         if file_size > 50 * 1024 * 1024:
-            await processing_msg.delete()
+            try:
+                await processing_msg.delete()
+            except:
+                pass
+            
             await message.reply(
                 f"❌ فایل بیش از حد بزرگ: {file_size_mb:.1f} MB"
             )
+            
+            try:
+                os.remove(filename)
+            except:
+                pass
         else:
-            await processing_msg.delete()
-            await message.reply_document(
-                open(filename, 'rb'),
-                caption=f"✅ **دانلود موفق!** 🐦\n💾 {file_size_mb:.1f} MB"
-            )
+            try:
+                await message.reply_document(
+                    FSInputFile(filename),
+                    caption=f"✅ **دانلود موفق!** 🐦\n💾 {file_size_mb:.1f} MB"
+                )
+            except Exception as e:
+                await message.reply(f"❌ خطا در ارسال: {str(e)[:50]}")
+            
+            try:
+                await processing_msg.delete()
+            except:
+                pass
+            
             try:
                 os.remove(filename)
             except:
                 pass
     
     except Exception as e:
-        await processing_msg.delete()
+        try:
+            await processing_msg.delete()
+        except:
+            pass
+        
         await message.reply(f"❌ خطا: {str(e)[:100]}")
     
     await state.clear()

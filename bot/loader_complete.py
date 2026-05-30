@@ -2,6 +2,8 @@
 
 import re
 import asyncio
+import os
+from pathlib import Path
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -9,6 +11,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from config_simple import settings
+
+try:
+    import yt_dlp
+    YTDLP_AVAILABLE = True
+except ImportError:
+    YTDLP_AVAILABLE = False
 
 # Initialize bot
 try:
@@ -148,72 +156,215 @@ async def handle_message(message: Message):
 
 @dp.message(DownloadStates.waiting_for_youtube_url)
 async def handle_youtube_url(message: Message, state: FSMContext):
-    """Handle YouTube URL"""
+    """Handle YouTube URL with yt-dlp"""
     url = message.text
     
     # Basic YouTube URL validation
-    if "youtube.com" in url or "youtu.be" in url:
-        await message.reply(
-            "✅ **لینک دریافت شد!**\n\n"
-            f"URL: {url}\n\n"
-            "⏳ در حال دانلود...\n\n"
-            "⚠️ **نکته:** دریافت URL فعلاً فعال نیست\n"
-            "برای فعال‌سازی، API key لازم است"
-        )
-    else:
+    if not ("youtube.com" in url or "youtu.be" in url):
         await message.reply(
             "❌ **لینک نامعتبر**\n\n"
             "لطفا لینک YouTube معتبر ارسال کنید:\n"
             "• https://youtu.be/...\n"
             "• https://youtube.com/watch?v=..."
         )
+        await state.clear()
+        return
+    
+    # Check if yt-dlp is available
+    if not YTDLP_AVAILABLE:
+        await message.reply(
+            "❌ **خطا**\n\n"
+            "yt-dlp بر روی سرور نصب نیست\n"
+            "لطفا ابتدا: pip install yt-dlp"
+        )
+        await state.clear()
+        return
+    
+    # Send processing message
+    processing_msg = await message.reply(
+        "⏳ **در حال دانلود...**\n\n"
+        f"URL: {url}\n"
+        "لطفا منتظر باشید..."
+    )
+    
+    try:
+        # Download with yt-dlp
+        temp_dir = Path("temp_downloads")
+        temp_dir.mkdir(exist_ok=True)
+        
+        ydl_opts = {
+            'format': 'best[ext=mp4]',
+            'outtmpl': str(temp_dir / '%(title)s.%(ext)s'),
+            'quiet': False,
+            'no_warnings': False,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+        
+        # Send the file
+        file_size = os.path.getsize(filename)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        if file_size > 50 * 1024 * 1024:  # 50 MB limit for Telegram
+            await processing_msg.delete()
+            await message.reply(
+                f"❌ **فایل بیش از حد بزرگ است**\n\n"
+                f"اندازه: {file_size_mb:.1f} MB\n"
+                "حد مجاز: 50 MB"
+            )
+        else:
+            # Delete processing message and send file
+            await processing_msg.delete()
+            
+            await message.reply_document(
+                open(filename, 'rb'),
+                caption=f"✅ **دانلود موفق!**\n\n📹 {info.get('title', 'Video')}\n💾 {file_size_mb:.1f} MB"
+            )
+            
+            # Cleanup
+            try:
+                os.remove(filename)
+            except:
+                pass
+    
+    except Exception as e:
+        await processing_msg.delete()
+        await message.reply(
+            f"❌ **خطا در دانلود**\n\n"
+            f"مشکل: {str(e)[:100]}"
+        )
     
     await state.clear()
 
 @dp.message(DownloadStates.waiting_for_instagram_url)
 async def handle_instagram_url(message: Message, state: FSMContext):
-    """Handle Instagram URL"""
+    """Handle Instagram URL with yt-dlp"""
     url = message.text
     
-    # Basic Instagram URL validation
-    if "instagram.com" in url:
-        await message.reply(
-            "✅ **لینک دریافت شد!**\n\n"
-            f"URL: {url}\n\n"
-            "⏳ در حال دانلود...\n\n"
-            "⚠️ **نکته:** دریافت URL فعلاً فعال نیست\n"
-            "برای فعال‌سازی، API key لازم است"
-        )
-    else:
+    if "instagram.com" not in url:
         await message.reply(
             "❌ **لینک نامعتبر**\n\n"
             "لطفا لینک Instagram معتبر ارسال کنید:\n"
             "• https://instagram.com/p/..."
         )
+        await state.clear()
+        return
+    
+    if not YTDLP_AVAILABLE:
+        await message.reply(
+            "❌ **خطا**\n\n"
+            "yt-dlp بر روی سرور نصب نیست"
+        )
+        await state.clear()
+        return
+    
+    processing_msg = await message.reply(
+        "⏳ **در حال دانلود...**\n\n"
+        f"URL: {url}"
+    )
+    
+    try:
+        temp_dir = Path("temp_downloads")
+        temp_dir.mkdir(exist_ok=True)
+        
+        ydl_opts = {
+            'format': 'best',
+            'outtmpl': str(temp_dir / '%(title)s.%(ext)s'),
+            'quiet': False,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+        
+        file_size = os.path.getsize(filename)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        if file_size > 50 * 1024 * 1024:
+            await processing_msg.delete()
+            await message.reply(
+                f"❌ فایل بیش از حد بزرگ: {file_size_mb:.1f} MB\n"
+                "حد مجاز: 50 MB"
+            )
+        else:
+            await processing_msg.delete()
+            await message.reply_document(
+                open(filename, 'rb'),
+                caption=f"✅ **دانلود موفق!** 📸\n💾 {file_size_mb:.1f} MB"
+            )
+            try:
+                os.remove(filename)
+            except:
+                pass
+    
+    except Exception as e:
+        await processing_msg.delete()
+        await message.reply(f"❌ خطا: {str(e)[:100]}")
     
     await state.clear()
 
 @dp.message(DownloadStates.waiting_for_twitter_url)
 async def handle_twitter_url(message: Message, state: FSMContext):
-    """Handle Twitter URL"""
+    """Handle Twitter URL with yt-dlp"""
     url = message.text
     
-    # Basic Twitter URL validation
-    if "twitter.com" in url or "x.com" in url:
-        await message.reply(
-            "✅ **لینک دریافت شد!**\n\n"
-            f"URL: {url}\n\n"
-            "⏳ در حال دانلود...\n\n"
-            "⚠️ **نکته:** دریافت URL فعلاً فعال نیست\n"
-            "برای فعال‌سازی، API key لازم است"
-        )
-    else:
+    if "twitter.com" not in url and "x.com" not in url:
         await message.reply(
             "❌ **لینک نامعتبر**\n\n"
             "لطفا لینک Twitter معتبر ارسال کنید:\n"
             "• https://twitter.com/.../status/..."
-            "• https://x.com/.../status/..."
         )
+        await state.clear()
+        return
+    
+    if not YTDLP_AVAILABLE:
+        await message.reply("❌ **خطا**\n\nyt-dlp نصب نیست")
+        await state.clear()
+        return
+    
+    processing_msg = await message.reply(
+        "⏳ **در حال دانلود...**\n\n"
+        f"URL: {url}"
+    )
+    
+    try:
+        temp_dir = Path("temp_downloads")
+        temp_dir.mkdir(exist_ok=True)
+        
+        ydl_opts = {
+            'format': 'best',
+            'outtmpl': str(temp_dir / '%(title)s.%(ext)s'),
+            'quiet': False,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+        
+        file_size = os.path.getsize(filename)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        if file_size > 50 * 1024 * 1024:
+            await processing_msg.delete()
+            await message.reply(
+                f"❌ فایل بیش از حد بزرگ: {file_size_mb:.1f} MB"
+            )
+        else:
+            await processing_msg.delete()
+            await message.reply_document(
+                open(filename, 'rb'),
+                caption=f"✅ **دانلود موفق!** 🐦\n💾 {file_size_mb:.1f} MB"
+            )
+            try:
+                os.remove(filename)
+            except:
+                pass
+    
+    except Exception as e:
+        await processing_msg.delete()
+        await message.reply(f"❌ خطا: {str(e)[:100]}")
     
     await state.clear()
 

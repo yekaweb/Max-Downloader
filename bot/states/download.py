@@ -45,6 +45,12 @@ class DownloadStates(StatesGroup):
     # STEP 4: AUDIO PATH - Subtitle Selection (Optional)
     audio_selecting_subtitle = State()
     
+    # CACHE STATES: Handling cached downloads
+    checking_cache = State()
+    viewing_cached_files = State()
+    selecting_cached_file = State()
+    cache_format_selection = State()
+    
     # Execution states (common for both)
     downloading = State()
     uploading = State()

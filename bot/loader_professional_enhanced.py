@@ -129,6 +129,26 @@ def format_time_hms(seconds: int) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
+async def safe_edit_message(query: CallbackQuery, text: str, kb: Optional[InlineKeyboardMarkup] = None, parse_mode: str = "HTML"):
+    """
+    Safely edit callback query message
+    Handles both text and photo messages
+    Falls back to delete + new message if edit fails
+    """
+    try:
+        # Try to edit text first (works for text messages)
+        await query.message.edit_text(text, parse_mode=parse_mode, reply_markup=kb)
+    except Exception as e:
+        try:
+            # If edit fails (photo message or other issue), delete and send new
+            await query.message.delete()
+        except:
+            pass
+        
+        # Send new message
+        await query.message.chat.send_message(text, parse_mode=parse_mode, reply_markup=kb)
+
+
 # ==================== URL DETECTION ====================
 
 def detect_platform(url: str) -> Optional[str]:
@@ -738,8 +758,7 @@ async def handle_format_type(query: CallbackQuery, state: FSMContext):
         # Ask for codec first to show sizes
         text = "🎞️ <b>کدک ویدیو را انتخاب کنید:</b>\n\n<i>هر کدک فایل های متفاوتی دارد</i>"
         kb = get_codec_kb(media_info)
-        
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await safe_edit_message(query, text, kb)
         await state.set_state(DownloadStates.video_codec_selection)
 
     elif query.data == "format_audio":
@@ -751,8 +770,7 @@ async def handle_format_type(query: CallbackQuery, state: FSMContext):
 
         text = "🎵 <b>فرمت صوتی را انتخاب کنید:</b>"
         kb = get_audio_format_kb(media_info['audio_formats'])
-        
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await safe_edit_message(query, text, kb)
         await state.set_state(DownloadStates.audio_format_selection)
 
 
@@ -764,7 +782,7 @@ async def handle_codec(query: CallbackQuery, state: FSMContext):
 
     if query.data == "back_to_format":
         text = "🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>"
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_format_type_kb())
+        await safe_edit_message(query, text, get_format_type_kb())
         await state.set_state(DownloadStates.selecting_format_type)
         return
 
@@ -793,8 +811,7 @@ async def handle_codec(query: CallbackQuery, state: FSMContext):
     # Show quality selection
     text = "📺 <b>کیفیت ویدیو را انتخاب کنید:</b>"
     kb = get_video_quality_kb(codec, codec_formats)
-    
-    await query.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    await safe_edit_message(query, text, kb)
     await state.set_state(DownloadStates.video_quality_selection)
 
 
@@ -809,7 +826,7 @@ async def handle_video_quality(query: CallbackQuery, state: FSMContext):
         media_info = session['media_info']
         text = "🎞️ <b>کدک ویدیو را انتخاب کنید:</b>"
         kb = get_codec_kb(media_info)
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await safe_edit_message(query, text, kb)
         await state.set_state(DownloadStates.video_codec_selection)
         return
 
@@ -831,7 +848,7 @@ async def handle_video_quality(query: CallbackQuery, state: FSMContext):
     available_subs = media_info.get('available_subtitles', [])
     
     text = "📝 <b>زیرنویس می‌خواهید؟</b>"
-    await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_subtitle_kb(available_subs))
+    await safe_edit_message(query, text, get_subtitle_kb(available_subs))
     await state.set_state(DownloadStates.video_selecting_subtitle)
 
 
@@ -845,7 +862,7 @@ async def handle_subtitle(query: CallbackQuery, state: FSMContext):
         session = get_session(query.from_user.id)
         media_info = session['media_info']
         text = "🎞️ <b>کدک ویدیو را انتخاب کنید:</b>"
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_codec_kb(media_info))
+        await safe_edit_message(query, text, get_codec_kb(media_info))
         await state.set_state(DownloadStates.video_codec_selection)
         return
 
@@ -868,7 +885,7 @@ async def handle_subtitle(query: CallbackQuery, state: FSMContext):
 
     # Move to send_as selection
     text = "📤 <b>نحوه دریافت فایل:</b>"
-    await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_send_as_kb(file_size_mb))
+    await safe_edit_message(query, text, get_send_as_kb(file_size_mb))
     await state.set_state(DownloadStates.video_selecting_send_as)
 
 
@@ -883,7 +900,7 @@ async def handle_send_as(query: CallbackQuery, state: FSMContext):
         media_info = session['media_info']
         available_subs = media_info.get('available_subtitles', [])
         text = "📝 <b>زیرنویس می‌خواهید؟</b>"
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_subtitle_kb(available_subs))
+        await safe_edit_message(query, text, get_subtitle_kb(available_subs))
         await state.set_state(DownloadStates.video_selecting_subtitle)
         return
 
@@ -903,7 +920,7 @@ async def handle_audio_format(query: CallbackQuery, state: FSMContext):
 
     if query.data == "back_to_format":
         text = "🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>"
-        await query.message.edit_text(text, parse_mode="HTML", reply_markup=get_format_type_kb())
+        await safe_edit_message(query, text, get_format_type_kb())
         await state.set_state(DownloadStates.selecting_format_type)
         return
 
@@ -1176,54 +1193,54 @@ async def handle_download_menu(query: CallbackQuery, state: FSMContext):
     """Handle download button from main menu"""
     await query.answer()
     await state.set_state(DownloadStates.waiting_for_url)
-    await query.message.edit_text(
+    text = (
         "🎬 <b>لطفاً لینک فایل را ارسال کنید:</b>\n\n"
         "پشتیبانی شده:\n"
         "✅ YouTube\n"
         "✅ Instagram\n"
         "✅ Twitter / X\n"
         "✅ TikTok\n"
-        "✅ سایت‌های دیگر",
-        parse_mode="HTML"
+        "✅ سایت‌های دیگر"
     )
+    await safe_edit_message(query, text)
 
 
 @dp.callback_query(F.data == "profile")
 async def handle_profile(query: CallbackQuery):
     """Handle profile button"""
     await query.answer()
-    await query.message.edit_text(
+    text = (
         "👤 <b>پروفایل شما</b>\n\n"
         "📊 <b>اطلاعات کاربری:</b>\n"
         f"🆔 شناسه: {query.from_user.id}\n"
         f"📛 نام: {query.from_user.first_name or 'Unknown'}\n\n"
         "📥 دانلودهای امروز: 0/5\n"
         "📦 کل دانلود: 0\n\n"
-        "<i>نسخه ی کامل پروفایل به زودی...</i>",
-        parse_mode="HTML"
+        "<i>نسخه ی کامل پروفایل به زودی...</i>"
     )
+    await safe_edit_message(query, text)
 
 
 @dp.callback_query(F.data == "settings")
 async def handle_settings(query: CallbackQuery):
     """Handle settings button"""
     await query.answer()
-    await query.message.edit_text(
+    text = (
         "⚙️ <b>تنظیمات</b>\n\n"
         "🔧 گزینه های تنظیم:\n"
         "• کیفیت پیش فرض: 720p\n"
         "• فرمت صوتی: MP3\n"
         "• زبان: فارسی\n\n"
-        "<i>تنظیمات پیشرفته به زودی...</i>",
-        parse_mode="HTML"
+        "<i>تنظیمات پیشرفته به زودی...</i>"
     )
+    await safe_edit_message(query, text)
 
 
 @dp.callback_query(F.data == "guide")
 async def handle_guide(query: CallbackQuery):
     """Handle guide button"""
     await query.answer()
-    await query.message.edit_text(
+    text = (
         "📚 <b>راهنما</b>\n\n"
         "<b>نحوه استفاده:</b>\n\n"
         "1️⃣ دکمه 'دانلود ویدیو' را فشار دهید\n"
@@ -1233,16 +1250,16 @@ async def handle_guide(query: CallbackQuery):
         "5️⃣ زیرنویس انتخاب کنید (اختیاری)\n"
         "6️⃣ نحوه دریافت را انتخاب کنید\n"
         "7️⃣ منتظر دانلود و آپلود باشید\n\n"
-        "✅ فایل برای شما ارسال می‌شود!",
-        parse_mode="HTML"
+        "✅ فایل برای شما ارسال می‌شود!"
     )
+    await safe_edit_message(query, text)
 
 
 @dp.callback_query(F.data == "about_menu")
 async def handle_about(query: CallbackQuery):
     """Handle about button"""
     await query.answer()
-    await query.message.edit_text(
+    text = (
         "❓ <b>درباره DLBot</b>\n\n"
         "🤖 <b>نسخه:</b> 3.0 Enhanced\n"
         "📅 <b>تاریخ:</b> 2026-05-31\n\n"
@@ -1253,9 +1270,9 @@ async def handle_about(query: CallbackQuery):
         "✅ انتخاب زیرنویس\n"
         "✅ دانلود فایل‌های بزرگ (بدون محدودیت)\n\n"
         "👨‍💻 <b>توسعه‌دهنده:</b> Copilot Team\n"
-        "📞 <b>پشتیبانی:</b> @dlbot_support",
-        parse_mode="HTML"
+        "📞 <b>پشتیبانی:</b> @dlbot_support"
     )
+    await safe_edit_message(query, text)
 
 
 @dp.callback_query(F.data == "back_main")
@@ -1263,17 +1280,16 @@ async def handle_back_main(query: CallbackQuery):
     """Handle back to main menu button"""
     await query.answer()
     from bot.keyboards.inline import main_menu_kb
-    await query.message.edit_text(
+    text = (
         "🤖 <b>سلام به DLBot!</b>\n\n"
         "دانلود‌کننده حرفه‌ای برای:\n"
         "• 🎥 YouTube\n"
         "• 📸 Instagram\n"
         "• 🐦 Twitter/X\n"
         "• 🎵 TikTok\n\n"
-        "برای شروع، یک لینک ارسال کنید یا از دکمه‌های زیر استفاده کنید:",
-        reply_markup=main_menu_kb(),
-        parse_mode="HTML"
+        "برای شروع، یک لینک ارسال کنید یا از دکمه‌های زیر استفاده کنید:"
     )
+    await safe_edit_message(query, text, main_menu_kb())
 
 
 # ==================== RUN ====================

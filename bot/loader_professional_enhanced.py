@@ -170,6 +170,7 @@ async def get_media_info(url: str) -> Optional[Dict[str, Any]]:
             'skip_download': True,
             'extract_flat': False,
             'writesubtitles': False,  # Don't download, just detect
+            'socket_timeout': 10,
         }
 
         loop = asyncio.get_event_loop()
@@ -178,7 +179,15 @@ async def get_media_info(url: str) -> Optional[Dict[str, Any]]:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(url, download=False)
 
-        info = await loop.run_in_executor(None, _extract)
+        try:
+            # Set 30 second timeout for extraction
+            info = await asyncio.wait_for(
+                loop.run_in_executor(None, _extract),
+                timeout=30
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout fetching media info for {url}")
+            return None
         
         if not info:
             return None
@@ -616,53 +625,59 @@ async def cmd_download(message: Message, state: FSMContext):
 @dp.message(DownloadStates.waiting_for_url)
 async def handle_url_input(message: Message, state: FSMContext):
     """Handle URL input with thumbnail display"""
-    url = message.text.strip()
+    try:
+        url = message.text.strip()
 
-    if not is_valid_url(url):
-        await message.answer(
-            "❌ <b>لینک نامعتبر است!</b>\n\n"
-            "لطفاً یک لینک معتبر ارسال کنید:",
-            parse_mode="HTML"
-        )
-        return
+        if not is_valid_url(url):
+            await message.answer(
+                "❌ <b>لینک نامعتبر است!</b>\n\n"
+                "لطفاً یک لینک معتبر ارسال کنید:",
+                parse_mode="HTML"
+            )
+            return
 
-    session = get_session(message.from_user.id)
-    session['url'] = url
-    platform = detect_platform(url)
+        session = get_session(message.from_user.id)
+        session['url'] = url
+        platform = detect_platform(url)
 
-    # Show fetching message
-    progress_msg = await send_progress_message(message, "درحال دریافت اطلاعات...", phase="fetching")
-    session['progress_message_id'] = progress_msg.message_id
+        # Show fetching message
+        progress_msg = await send_progress_message(message, "درحال دریافت اطلاعات...", phase="fetching")
+        session['progress_message_id'] = progress_msg.message_id
 
-    # Fetch media info
-    media_info = await get_media_info(url)
+        logger.info(f"🔍 Fetching media info for URL: {url[:50]}...")
+        
+        # Fetch media info with timeout
+        media_info = await get_media_info(url)
 
-    if not media_info:
-        await progress_msg.delete()
-        await message.answer(
-            f"❌ <b>خطا در دریافت اطلاعات!</b>\n\n"
-            f"لطفاً لینک را بررسی کنید و دوباره تلاش کنید.",
-            parse_mode="HTML"
-        )
-        await state.set_state(DownloadStates.waiting_for_url)
-        return
+        if not media_info:
+            await progress_msg.delete()
+            logger.error(f"❌ Failed to fetch media info for {url}")
+            await message.answer(
+                f"❌ <b>خطا در دریافت اطلاعات!</b>\n\n"
+                f"لطفاً لینک را بررسی کنید و دوباره تلاش کنید.\n\n"
+                f"🔗 لینک: {url[:50]}...",
+                parse_mode="HTML"
+            )
+            await state.set_state(DownloadStates.waiting_for_url)
+            return
 
-    session['media_info'] = media_info
+        logger.info(f"✅ Media info fetched: {media_info['title']}")
+        session['media_info'] = media_info
 
-    # Prepare media info text
-    title = media_info['title'][:60]
-    duration = media_info['duration_str']
-    views = media_info['views_str']
-    uploader = media_info['uploader'][:30]
-    
-    platform_emoji = get_platform_emoji(platform) if platform else "📺"
+        # Prepare media info text
+        title = media_info['title'][:60]
+        duration = media_info['duration_str']
+        views = media_info['views_str']
+        uploader = media_info['uploader'][:30]
+        
+        platform_emoji = get_platform_emoji(platform) if platform else "📺"
 
-    info_text = f"""
+        info_text = f"""
 {platform_emoji} <b>اطلاعات رسانه</b>
 
 📺 <b>نام:</b> <code>{title}</code>
 ⏱ <b>مدت:</b> {duration}
-👁 <b>بازدید:</b> {views:,}
+👁 <b>بازدید:</b> {views}
 👤 <b>اپلود‌کننده:</b> {uploader}
 
 ━━━━━━━━━━━━━━━━━━━━━
@@ -670,24 +685,35 @@ async def handle_url_input(message: Message, state: FSMContext):
 🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>
 """
 
-    await progress_msg.delete()
-    
-    # Try to send with thumbnail
-    try:
-        if media_info.get('thumbnail'):
-            await message.answer_photo(
-                photo=media_info['thumbnail'],
-                caption=info_text,
-                reply_markup=get_format_type_kb(),
-                parse_mode="HTML"
-            )
-        else:
+        await progress_msg.delete()
+        
+        # Try to send with thumbnail
+        try:
+            if media_info.get('thumbnail'):
+                await message.answer_photo(
+                    photo=media_info['thumbnail'],
+                    caption=info_text,
+                    reply_markup=get_format_type_kb(),
+                    parse_mode="HTML"
+                )
+            else:
+                await message.answer(info_text, reply_markup=get_format_type_kb(), parse_mode="HTML")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not send photo: {e}, sending text instead")
             await message.answer(info_text, reply_markup=get_format_type_kb(), parse_mode="HTML")
+        
+        await state.set_state(DownloadStates.selecting_format_type)
+        logger.info(f"✅ Moved to selecting_format_type state")
+        
     except Exception as e:
-        logger.warning(f"Could not send photo: {e}, sending text instead")
-        await message.answer(info_text, reply_markup=get_format_type_kb(), parse_mode="HTML")
-    
-    await state.set_state(DownloadStates.selecting_format_type)
+        logger.error(f"❌ Error in handle_url_input: {e}")
+        await message.answer(
+            f"❌ <b>خطا غیرمنتظره!</b>\n\n"
+            f"جزئیات: {str(e)[:100]}\n\n"
+            f"لطفاً دوباره تلاش کنید.",
+            parse_mode="HTML"
+        )
+        await state.set_state(DownloadStates.waiting_for_url)
 
 
 # Handle format type selection

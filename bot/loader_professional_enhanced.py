@@ -571,19 +571,30 @@ async def update_progress_message(
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     """Start command"""
-    from bot.keyboards.inline import main_menu_kb
+    logger.info(f"✅ /start command received from user {message.from_user.id}")
     
-    await message.answer(
-        "🤖 <b>سلام به DLBot!</b>\n\n"
-        "دانلود‌کننده حرفه‌ای برای:\n"
-        "• 🎥 YouTube\n"
-        "• 📸 Instagram\n"
-        "• 🐦 Twitter/X\n"
-        "• 🎵 TikTok\n\n"
-        "برای شروع، یک لینک ارسال کنید یا از دکمه‌های زیر استفاده کنید:",
-        reply_markup=main_menu_kb(),
-        parse_mode="HTML"
-    )
+    try:
+        from bot.keyboards.inline import main_menu_kb
+        
+        await message.answer(
+            "🤖 <b>سلام به DLBot!</b>\n\n"
+            "دانلود‌کننده حرفه‌ای برای:\n"
+            "• 🎥 YouTube\n"
+            "• 📸 Instagram\n"
+            "• 🐦 Twitter/X\n"
+            "• 🎵 TikTok\n\n"
+            "برای شروع، یک لینک ارسال کنید یا از دکمه‌های زیر استفاده کنید:",
+            reply_markup=main_menu_kb(),
+            parse_mode="HTML"
+        )
+        logger.info(f"✅ /start response sent to user {message.from_user.id}")
+    except Exception as e:
+        logger.error(f"❌ Error in cmd_start: {e}")
+        await message.answer(
+            "❌ خطا در ارسال پیام شروع\n"
+            f"جزئیات: {str(e)[:100]}",
+            parse_mode="HTML"
+        )
 
 
 @dp.message(Command("download"))
@@ -1130,6 +1141,113 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 logger.info(f"✅ Cleaned up temp file: {session['file_path']}")
         except Exception as e:
             logger.warning(f"Failed to cleanup temp file: {e}")
+
+
+# ==================== MAIN MENU HANDLERS ====================
+
+@dp.callback_query(F.data == "download_menu")
+async def handle_download_menu(query: CallbackQuery, state: FSMContext):
+    """Handle download button from main menu"""
+    await query.answer()
+    await state.set_state(DownloadStates.waiting_for_url)
+    await query.message.edit_text(
+        "🎬 <b>لطفاً لینک فایل را ارسال کنید:</b>\n\n"
+        "پشتیبانی شده:\n"
+        "✅ YouTube\n"
+        "✅ Instagram\n"
+        "✅ Twitter / X\n"
+        "✅ TikTok\n"
+        "✅ سایت‌های دیگر",
+        parse_mode="HTML"
+    )
+
+
+@dp.callback_query(F.data == "profile")
+async def handle_profile(query: CallbackQuery):
+    """Handle profile button"""
+    await query.answer()
+    await query.message.edit_text(
+        "👤 <b>پروفایل شما</b>\n\n"
+        "📊 <b>اطلاعات کاربری:</b>\n"
+        f"🆔 شناسه: {query.from_user.id}\n"
+        f"📛 نام: {query.from_user.first_name or 'Unknown'}\n\n"
+        "📥 دانلودهای امروز: 0/5\n"
+        "📦 کل دانلود: 0\n\n"
+        "<i>نسخه ی کامل پروفایل به زودی...</i>",
+        parse_mode="HTML"
+    )
+
+
+@dp.callback_query(F.data == "settings")
+async def handle_settings(query: CallbackQuery):
+    """Handle settings button"""
+    await query.answer()
+    await query.message.edit_text(
+        "⚙️ <b>تنظیمات</b>\n\n"
+        "🔧 گزینه های تنظیم:\n"
+        "• کیفیت پیش فرض: 720p\n"
+        "• فرمت صوتی: MP3\n"
+        "• زبان: فارسی\n\n"
+        "<i>تنظیمات پیشرفته به زودی...</i>",
+        parse_mode="HTML"
+    )
+
+
+@dp.callback_query(F.data == "guide")
+async def handle_guide(query: CallbackQuery):
+    """Handle guide button"""
+    await query.answer()
+    await query.message.edit_text(
+        "📚 <b>راهنما</b>\n\n"
+        "<b>نحوه استفاده:</b>\n\n"
+        "1️⃣ دکمه 'دانلود ویدیو' را فشار دهید\n"
+        "2️⃣ لینک فایل (YouTube, Instagram, etc) را ارسال کنید\n"
+        "3️⃣ نوع فایل را انتخاب کنید (ویدیو/صدا)\n"
+        "4️⃣ کیفیت و کدک مورد نظر را انتخاب کنید\n"
+        "5️⃣ زیرنویس انتخاب کنید (اختیاری)\n"
+        "6️⃣ نحوه دریافت را انتخاب کنید\n"
+        "7️⃣ منتظر دانلود و آپلود باشید\n\n"
+        "✅ فایل برای شما ارسال می‌شود!",
+        parse_mode="HTML"
+    )
+
+
+@dp.callback_query(F.data == "about_menu")
+async def handle_about(query: CallbackQuery):
+    """Handle about button"""
+    await query.answer()
+    await query.message.edit_text(
+        "❓ <b>درباره DLBot</b>\n\n"
+        "🤖 <b>نسخه:</b> 3.0 Enhanced\n"
+        "📅 <b>تاریخ:</b> 2026-05-31\n\n"
+        "<b>قابلیت‌ها:</b>\n"
+        "✅ دانلود ویدیو از YouTube، Instagram، Twitter\n"
+        "✅ انتخاب کیفیت و کدک متعدد\n"
+        "✅ دانلود صوت با فرمت‌های مختلف\n"
+        "✅ انتخاب زیرنویس\n"
+        "✅ دانلود فایل‌های بزرگ (بدون محدودیت)\n\n"
+        "👨‍💻 <b>توسعه‌دهنده:</b> Copilot Team\n"
+        "📞 <b>پشتیبانی:</b> @dlbot_support",
+        parse_mode="HTML"
+    )
+
+
+@dp.callback_query(F.data == "back_main")
+async def handle_back_main(query: CallbackQuery):
+    """Handle back to main menu button"""
+    await query.answer()
+    from bot.keyboards.inline import main_menu_kb
+    await query.message.edit_text(
+        "🤖 <b>سلام به DLBot!</b>\n\n"
+        "دانلود‌کننده حرفه‌ای برای:\n"
+        "• 🎥 YouTube\n"
+        "• 📸 Instagram\n"
+        "• 🐦 Twitter/X\n"
+        "• 🎵 TikTok\n\n"
+        "برای شروع، یک لینک ارسال کنید یا از دکمه‌های زیر استفاده کنید:",
+        reply_markup=main_menu_kb(),
+        parse_mode="HTML"
+    )
 
 
 # ==================== RUN ====================

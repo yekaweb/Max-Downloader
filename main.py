@@ -38,31 +38,53 @@ async def main():
     logger.info(f"🌐 Default Language: {settings.DEFAULT_LANGUAGE}")
     
     # Validate bot token
-    if not settings.BOT_TOKEN:
+    if not settings.BOT_TOKEN or settings.BOT_TOKEN == "":
         logger.error("❌ BOT_TOKEN not configured in .env file")
+        logger.error("   Please add BOT_TOKEN=your_token_here to .env file")
         return
+    
+    logger.info(f"✅ Bot token found: {settings.BOT_TOKEN[:15]}...")
     
     # Import bot components (lazy import)
     try:
+        logger.info("📦 Loading bot components...")
         from bot.loader_professional_enhanced import bot, dp
-        if not bot or not dp:
-            raise ImportError("Bot or Dispatcher initialization failed")
+        
+        if not bot:
+            raise ImportError("Bot initialization failed - bot is None")
+        if not dp:
+            raise ImportError("Dispatcher initialization failed - dp is None")
+            
         logger.info("✅ Bot components loaded successfully (Enhanced Professional Download System)")
+        logger.info(f"📡 Bot username: {settings.BOT_USERNAME}")
+        
     except ImportError as e:
-        logger.error(f"❌ Failed to load bot components: {e}")
+        logger.error(f"❌ Import error - Failed to load bot components: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return
+    except Exception as e:
+        logger.error(f"❌ Unexpected error during bot initialization: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return
     
     try:
         # Start bot polling
         logger.info("🚀 Starting bot polling...")
         logger.info("📡 Bot is listening for updates...")
+        logger.info("💡 Send /start command to the bot to test")
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except KeyboardInterrupt:
         logger.info("⏹️  Bot stopped by user")
     except Exception as e:
-        logger.error(f"❌ Bot error: {e}", exc_info=True)
+        logger.error(f"❌ Bot error during polling: {e}", exc_info=True)
     finally:
-        await bot.session.close()
+        try:
+            await bot.session.close()
+            logger.info("✅ Bot session closed")
+        except Exception as e:
+            logger.warning(f"⚠️ Error closing bot session: {e}")
 
 
 if __name__ == "__main__":

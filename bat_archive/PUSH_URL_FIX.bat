@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/PUSH_URL_FIX.bat
-REM Use the archived copy instead of this root file.
 cd /d "d:\telgram bot md backup 2- Copy"
 
 echo.
@@ -63,6 +61,7 @@ echo ================================================
 echo.
 echo Next: Deploy on server same as before
 echo   git pull
+
 echo   pkill -9 -f "python.*main.py"
 echo   python3 main.py
 echo.

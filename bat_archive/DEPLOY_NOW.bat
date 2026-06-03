@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/DEPLOY_NOW.bat
-REM Use the archived copy instead of this root file.
 cd /d "d:\telgram bot md backup 2- Copy"
 
 echo ================================================
@@ -24,7 +22,6 @@ git commit -m "Fix: Complete bot loader with all handlers in one file
 - Updated main.py to use loader_complete instead of loader_simple
 - Eliminates import path ambiguity
 - All callbacks now properly registered
-- Menu, download, admin, and settings features working
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 if %ERRORLEVEL% NEQ 0 (
@@ -69,6 +66,5 @@ echo.
 echo 7. Test bot:
 echo    - Send /start
 echo    - Click "دانلود ویدیو"
-echo    - Click "🔙 بازگشت"
 echo.
-pause
+echo pause

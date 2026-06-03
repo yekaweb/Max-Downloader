@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/deploy.bat
-REM Use the archived copy instead of this root file.
 cd /d "d:\telgram bot md backup 2- Copy"
 
 echo.

@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/PUSH_BUG_FIX.bat
-REM Use the archived copy instead of this root file.
 cd /d "d:\telgram bot md backup 2- Copy"
 
 echo.
@@ -38,7 +36,7 @@ HOW IT WORKS NOW:
 1. User sends URL
 2. Show 'downloading...' message
 3. Download with yt-dlp (quiet mode)
-4. Send file to Telegram (safe file handling)
+4. Sends file to user
 5. Try to delete 'downloading...' message
 6. If delete fails - that's OK, user still sees file
 

@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/FINAL_PUSH.bat
-REM Use the archived copy instead of this root file.
 REM Final deployment script - Windows
 REM All-in-one command for complete bot deployment
 
@@ -56,7 +54,7 @@ Implementation:
 - bot/loader_complete.py: 300+ lines with all handlers
 - Main menu: 4 buttons (Download, Profile, Settings, Help)
 - Download menu: 3 platforms with back button
-- Admin panel: Stats, Broadcast, Users
+- Admin panel: Stats, Broadcast, User management
 - All callbacks properly registered
 - Back buttons available everywhere
 
@@ -80,9 +78,8 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo OK - Commit created
-echo.
 
+echo.
 echo [5/6] Pushing to GitHub...
 git push origin main
 

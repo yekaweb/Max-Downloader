@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/RUN_BOT.bat
-REM Use the archived copy instead of this root file.
 setlocal enabledelayedexpansion
 
 REM DLBot Deployment Script - Fixed Version

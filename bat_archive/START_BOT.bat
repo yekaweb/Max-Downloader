@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/START_BOT.bat
-REM Use the archived copy instead of this root file.
 setlocal enabledelayedexpansion
 
 REM DLBot Deployment Script
@@ -57,4 +55,3 @@ python main.py
 
 REM Pause to see output
 pause
-

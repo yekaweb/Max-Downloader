@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/PUSH_FIX_NOW.bat
-REM Use the archived copy instead of this root file.
 cd /d "d:\telgram bot md backup 2- Copy"
 
 echo.
@@ -71,8 +69,8 @@ echo   python3 main.py
 echo.
 echo Then in Telegram:
 echo   /start
+
 echo   Click "YouTube"
-echo   Send: https://youtu.be/...
-echo   Bot should accept it!
+echo   Send URL → Bot accepts it!
 echo.
 pause

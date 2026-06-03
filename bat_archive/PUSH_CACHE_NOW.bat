@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/PUSH_CACHE_NOW.bat
-REM Use the archived copy instead of this root file.
 REM Push cache system files to GitHub NOW
 cd /d "d:\telgram bot md backup 2- Copy"
 
@@ -40,4 +38,5 @@ if %errorlevel% equ 0 (
     echo [ERROR] Push failed
 )
 
+echo.
 pause

@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/PUSH_YTDLP.bat
-REM Use the archived copy instead of this root file.
 cd /d "d:\telgram bot md backup 2- Copy"
 
 echo.
@@ -68,8 +66,11 @@ echo ✅ No API keys needed
 echo.
 echo Test:
 echo   /start
+
 echo   Download YouTube
+
 echo   Send URL
+
 echo   Bot downloads and sends file!
 echo.
 pause

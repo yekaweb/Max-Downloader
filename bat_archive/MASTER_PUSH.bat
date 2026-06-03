@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/MASTER_PUSH.bat
-REM Use the archived copy instead of this root file.
 REM ============================================================================
 REM MASTER DEPLOYMENT SCRIPT - One-Click GitHub Push
 REM ============================================================================

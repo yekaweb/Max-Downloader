@@ -1,7 +1,4 @@
 @echo off
-REM Archived to bat_archive/COMMIT_AND_PUSH.bat
-REM Use the archived copy instead of this root file.
-
 REM Windows deployment script for DLBot
 
 cd /d "d:\telgram bot md backup 2- Copy"
@@ -61,10 +58,3 @@ git push origin main
 
 echo.
 echo ================================================
-echo ✅ DEPLOYMENT READY
-echo ================================================
-echo.
-echo Next: SSH to server and run:
-echo   bash server-deploy-complete.sh
-echo.
-pause

@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/GIT_PUSH_NOW.bat
-REM Use the archived copy instead of this root file.
 REM ============================================
 REM FINAL: Push Complete Bot Solution to GitHub
 REM ============================================
@@ -80,26 +78,3 @@ echo.
 echo ================================================
 echo ✅ SUCCESSFULLY PUSHED TO GITHUB!
 echo ================================================
-echo.
-echo NEXT STEPS:
-echo.
-echo 1. SSH to server:
-echo    ssh root@turkeyserver
-echo.
-echo 2. Pull code:
-echo    cd /home/dlbot-telegram
-echo    git pull origin main
-echo.
-echo 3. Restart bot:
-echo    pkill -9 -f "python.*main.py"
-echo    sleep 3
-echo    python3 main.py
-echo.
-echo 4. Test in Telegram:
-echo    /start
-echo    Click buttons
-echo    They respond!
-echo.
-echo See README_DEPLOY_NOW.md for complete guide
-echo.
-pause

@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/FINAL_DEPLOYMENT.bat
-REM Use the archived copy instead of this root file.
 REM ============================================================================
 REM FINAL DEPLOYMENT - Complete Bot with Caching & Cleanup
 REM ============================================================================
@@ -73,7 +71,6 @@ Improvements:
 - User sees exact file size, not estimates
 - No redundant downloads (100%% cache hit for same URL)
 - Server space saved (auto cleanup)
-- 99%% faster redelivery from cache
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 

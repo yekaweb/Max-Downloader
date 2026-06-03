@@ -1,6 +1,4 @@
 @echo off
-REM Archived to bat_archive/create_structure.bat
-REM Use the archived copy instead of this root file.
 REM Create DLBot project directory structure
 REM Run this from the project root directory
 
@@ -74,16 +72,8 @@ echo. > modules\instagram\__init__.py
 echo. > modules\twitter\__init__.py
 echo. > modules\direct_link\__init__.py
 
-REM Other packages
 echo. > services\__init__.py
 echo. > tasks\__init__.py
 echo. > database\__init__.py
 echo. > database\models\__init__.py
 echo. > database\repositories\__init__.py
-echo. > web\__init__.py
-echo. > web\routers\__init__.py
-echo. > utils\__init__.py
-echo. > migrations\__init__.py
-
-echo.
-echo ✅ Project directory structure created successfully!

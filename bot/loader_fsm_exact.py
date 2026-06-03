@@ -13,6 +13,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from config_simple import settings
+from database.connection import AsyncSessionLocal
+from database.repositories.cached_download_repo import CachedDownloadRepository
 from bot.states.download import DownloadStates
 from bot.keyboards.inline.download import (
     get_format_type_keyboard,
@@ -383,6 +385,33 @@ async def start_video_download(message: Message, user_id: int, state: FSMContext
         ),
         parse_mode="HTML"
     )
+
+    # Check DB cache for existing uploads
+    try:
+        async with AsyncSessionLocal() as db:
+            repo = CachedDownloadRepository(db)
+            cached = await repo.find_valid_by_url(url)
+            if cached:
+                entry = cached[0]
+                # Send cached file_id if available
+                try:
+                    await progress_msg.delete()
+                except Exception:
+                    pass
+
+                try:
+                    # Use file_id to resend without re-downloading
+                    await message.answer_video(entry.telegram_file_id,
+                                               caption=f"✅ فایل از کش ارسال شد\n📹 {entry.media_title}\n💾 {entry.file_size/1024/1024:.1f} MB")
+                    await state.clear()
+                    clear_session(user_id)
+                    return
+                except Exception:
+                    # If sending cached file fails, continue to fresh download
+                    pass
+    except Exception:
+        # DB errors should not block download flow
+        pass
     
     try:
         temp_dir = Path("temp_downloads")
@@ -412,10 +441,31 @@ async def start_video_download(message: Message, user_id: int, state: FSMContext
                     pass
             else:
                 try:
-                    await message.reply_video(
+                    sent = await message.reply_video(
                         FSInputFile(filename),
                         caption=f"✅ **دانلود موفق!**\n\n📹 {info.get('title', 'Video')}\n💾 {file_size_mb:.1f} MB"
                     )
+                    # Persist cache record (best-effort)
+                    try:
+                        async with AsyncSessionLocal() as db:
+                            repo = CachedDownloadRepository(db)
+                            await repo.create_from_upload(
+                                source_url=url,
+                                source_platform="youtube",
+                                media_title=info.get('title', '')[:500],
+                                media_duration=info.get('duration', 0),
+                                media_uploader=info.get('uploader', ''),
+                                telegram_file_id=sent.video.file_id,
+                                file_size=file_size,
+                                file_type="video/mp4",
+                                quality=session.get('quality', 'best'),
+                                format_codec=session.get('codec', 'h264'),
+                                format_container='mp4',
+                                resolution_width=None,
+                                resolution_height=None,
+                            )
+                    except Exception:
+                        pass
                 except Exception as e:
                     await message.answer(f"❌ خطا در ارسال: {str(e)[:50]}")
                 
@@ -503,10 +553,29 @@ async def start_audio_download(message: Message, user_id: int, state: FSMContext
                     pass
             else:
                 try:
-                    await message.reply_audio(
+                    sent = await message.reply_audio(
                         FSInputFile(filename),
                         caption=f"✅ **دانلود موفق!**\n\n🎵 {info.get('title', 'Audio')}\n💾 {file_size_mb:.1f} MB"
                     )
+                    # Persist cache record (best-effort)
+                    try:
+                        async with AsyncSessionLocal() as db:
+                            repo = CachedDownloadRepository(db)
+                            await repo.create_from_upload(
+                                source_url=url,
+                                source_platform="youtube",
+                                media_title=info.get('title', '')[:500],
+                                media_duration=info.get('duration', 0),
+                                media_uploader=info.get('uploader', ''),
+                                telegram_file_id=sent.audio.file_id,
+                                file_size=file_size,
+                                file_type=sent.audio.mime_type if getattr(sent, 'audio', None) else 'audio/mpeg',
+                                quality=session.get('audio_format', 'audio'),
+                                format_codec='mp3',
+                                format_container='mp3',
+                            )
+                    except Exception:
+                        pass
                 except Exception as e:
                     await message.answer(f"❌ خطا: {str(e)[:50]}")
                 

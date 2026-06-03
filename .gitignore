@@ -1,7 +1,14 @@
-# Environment variables
+# Environment & Config
 .env
 .env.local
 .env.*.local
+config.py
+
+# Database & Cache
+*.db
+*.sqlite
+*.sqlite3
+database/migrations/versions/*.py
 
 # Python
 __pycache__/
@@ -9,8 +16,8 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 venv/
+env/
 ENV/
 build/
 develop-eggs/
@@ -24,10 +31,11 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # IDE
 .vscode/
@@ -35,44 +43,29 @@ MANIFEST
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
-.project
-.pydevproject
+Thumbs.db
+.DS_Store?
 
-# Project specific
-logs/
-temp_downloads/
-cached_files/
+# Logs
 *.log
-celerybeat-schedule
-dump.rdb
+logs/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-migrations/versions/*.py
-
-# Pytest
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Celery
-celerybeat.pid
-celery_worker.log
-
-# Session files
-sessions/
-*.session
-
-# Temporary files
+# Temp
+tmp/
+temp/
 *.tmp
+
+# Cache
 .cache/
+*.cache
+
+# Node/npm
+node_modules/
+npm-debug.log
 
 # Docker
 .dockerignore
-
-# Misc
-.envrc
-direnv-*.log
+*.cache

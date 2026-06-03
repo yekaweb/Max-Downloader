@@ -54,21 +54,37 @@ dp = Dispatcher(storage=storage)
 
 # Initialize Pyrogram client for large file uploads (no 50MB limit)
 pyrogram_client = None
-if PYROGRAM_AVAILABLE and settings.PYROGRAM_APP_ID and settings.PYROGRAM_APP_HASH:
+if PYROGRAM_AVAILABLE:
     try:
-        pyrogram_client = Client(
-            name=settings.PYROGRAM_SESSION_NAME,
-            api_id=int(settings.PYROGRAM_APP_ID),
-            api_hash=settings.PYROGRAM_APP_HASH,
-            no_updates=True,
-            workdir='.',  # Store session in current directory
-        )
-        logger.info("✅ Pyrogram client initialized (unlimited file uploads)")
+        if settings.BOT_TOKEN:
+            pyrogram_kwargs = {
+                'name': settings.PYROGRAM_SESSION_NAME,
+                'bot_token': settings.BOT_TOKEN,
+                'no_updates': True,
+                'workdir': '.',  # Store session in current directory
+            }
+            if settings.PYROGRAM_APP_ID and settings.PYROGRAM_APP_HASH:
+                pyrogram_kwargs['api_id'] = int(settings.PYROGRAM_APP_ID)
+                pyrogram_kwargs['api_hash'] = settings.PYROGRAM_APP_HASH
+
+            pyrogram_client = Client(**pyrogram_kwargs)
+            logger.info("✅ Pyrogram client initialized with bot token (no phone login required)")
+        elif settings.PYROGRAM_APP_ID and settings.PYROGRAM_APP_HASH:
+            pyrogram_client = Client(
+                name=settings.PYROGRAM_SESSION_NAME,
+                api_id=int(settings.PYROGRAM_APP_ID),
+                api_hash=settings.PYROGRAM_APP_HASH,
+                no_updates=True,
+                workdir='.',  # Store session in current directory
+            )
+            logger.info("✅ Pyrogram client initialized as user session (phone login may be required once)")
+        else:
+            logger.warning("⚠️ Pyrogram credentials not configured, using aiogram only")
     except Exception as e:
         logger.warning(f"⚠️ Pyrogram initialization failed: {e}, will use aiogram only")
         pyrogram_client = None
 else:
-    logger.warning("⚠️ Pyrogram credentials not configured, using aiogram only")
+    logger.warning("⚠️ Pyrogram not installed - using aiogram only")
 
 # Session storage for tracking download progress per user
 download_sessions: Dict[int, Dict[str, Any]] = {}
@@ -145,8 +161,8 @@ async def safe_edit_message(query: CallbackQuery, text: str, kb: Optional[Inline
         except:
             pass
         
-        # Send new message
-        await query.message.chat.send_message(text, parse_mode=parse_mode, reply_markup=kb)
+        # Send new message using the callback query message context
+        await query.message.answer(text, parse_mode=parse_mode, reply_markup=kb)
 
 
 # ==================== URL DETECTION ====================
@@ -994,6 +1010,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
 
         # Define progress hook
         last_update = {'time': datetime.now()}
+        event_loop = asyncio.get_running_loop()
 
         def progress_hook(d):
             nonlocal last_update
@@ -1021,8 +1038,8 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 
                 eta = d.get('eta', None)
 
-                # Update message
-                asyncio.create_task(
+                # Update message from the main event loop thread
+                asyncio.run_coroutine_threadsafe(
                     update_progress_message(
                         progress_msg,
                         title,
@@ -1032,7 +1049,8 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                         speed_mbps,
                         eta,
                         phase="downloading"
-                    )
+                    ),
+                    event_loop
                 )
                 
                 last_update['time'] = now
@@ -1043,14 +1061,28 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         ydl_opts['progress_hooks'] = [progress_hook]
 
         # Execute download
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         
         def _download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(url, download=True)
+                info_dict = ydl.extract_info(url, download=True)
+                file_path = None
 
-        info = await loop.run_in_executor(None, _download)
-        file_path = ydl_opts['outtmpl'] % info
+                if isinstance(info_dict, dict):
+                    requested = info_dict.get('requested_downloads')
+                    if isinstance(requested, list) and requested:
+                        first = requested[0]
+                        if isinstance(first, dict):
+                            file_path = first.get('filepath')
+
+                    file_path = file_path or info_dict.get('filepath') or info_dict.get('_filename')
+
+                if not file_path:
+                    file_path = ydl.prepare_filename(info_dict)
+
+                return info_dict, file_path
+
+        info, file_path = await loop.run_in_executor(None, _download)
         session['file_path'] = file_path
 
         # Update to upload phase
@@ -1068,85 +1100,67 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             phase="uploading"
         )
 
-        # Use Pyrogram for large files (unlimited), aiogram for small files
+        # Determine the final send mode by user choice
+        send_as = session.get('send_as') or ('video' if session['format_type'] == 'video' else 'file')
+        is_video_send = send_as == 'video' and session['format_type'] == 'video'
+
+        async def send_with_aiogram():
+            file_input = FSInputFile(file_path)
+            if is_video_send:
+                await bot.send_video(
+                    chat_id=message.chat.id,
+                    video=file_input,
+                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                    supports_streaming=True,
+                )
+            else:
+                await bot.send_document(
+                    chat_id=message.chat.id,
+                    document=file_input,
+                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                )
+
+        async def send_with_pyrogram():
+            if not pyrogram_client:
+                raise Exception("Pyrogram client not available")
+            if not pyrogram_client.is_connected:
+                await pyrogram_client.start()
+            logger.info(f"📤 Uploading large file ({file_size_mb:.1f}MB) via Pyrogram...")
+            if is_video_send:
+                await pyrogram_client.send_video(
+                    chat_id=message.chat.id,
+                    video=file_path,
+                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                    supports_streaming=True,
+                )
+            else:
+                await pyrogram_client.send_document(
+                    chat_id=message.chat.id,
+                    document=file_path,
+                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                )
+            logger.info("✅ Pyrogram upload completed")
+
         if pyrogram_client and file_size_mb > 50:
             try:
-                await pyrogram_client.start()
-                logger.info(f"📤 Uploading large file ({file_size_mb:.1f}MB) via Pyrogram...")
-                
-                if session['format_type'] == 'video':
-                    await pyrogram_client.send_video(
-                        chat_id=message.chat.id,
-                        video=file_path,
-                        caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                    )
-                else:
-                    await pyrogram_client.send_document(
-                        chat_id=message.chat.id,
-                        document=file_path,
-                        caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                    )
-                
-                await pyrogram_client.stop()
-                logger.info("✅ Pyrogram upload completed")
-                
+                await send_with_pyrogram()
             except Exception as pyr_error:
                 logger.error(f"Pyrogram upload failed: {pyr_error}, falling back to aiogram")
                 if file_size_mb <= 2048:
                     try:
-                        file_input = FSInputFile(file_path)
-                        if session['format_type'] == 'video':
-                            await bot.send_video(
-                                chat_id=message.chat.id,
-                                video=file_input,
-                                caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                            )
-                        else:
-                            await bot.send_document(
-                                chat_id=message.chat.id,
-                                document=file_input,
-                                caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                            )
+                        await send_with_aiogram()
                     except Exception as e:
                         raise Exception(f"Upload failed: {e}")
                 else:
                     raise Exception(f"File too large: {file_size_mb:.1f}MB")
-        
         else:
-            # Use aiogram for normal files
             try:
-                file_input = FSInputFile(file_path)
-                
-                if session['format_type'] == 'video':
-                    await bot.send_video(
-                        chat_id=message.chat.id,
-                        video=file_input,
-                        caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                    )
-                else:
-                    await bot.send_document(
-                        chat_id=message.chat.id,
-                        document=file_input,
-                        caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                    )
+                await send_with_aiogram()
             except Exception as e:
                 logger.error(f"aiogram upload failed: {e}")
                 if pyrogram_client:
                     try:
-                        await pyrogram_client.start()
-                        if session['format_type'] == 'video':
-                            await pyrogram_client.send_video(
-                                chat_id=message.chat.id,
-                                video=file_path,
-                                caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                            )
-                        else:
-                            await pyrogram_client.send_document(
-                                chat_id=message.chat.id,
-                                document=file_path,
-                                caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
-                            )
-                        await pyrogram_client.stop()
+                        await send_with_pyrogram()
                     except Exception as pyr_error:
                         raise Exception(f"All uploads failed: {pyr_error}")
                 else:

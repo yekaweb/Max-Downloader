@@ -74,7 +74,9 @@ async def main():
         logger.info("🚀 Starting bot polling...")
         logger.info("📡 Bot is listening for updates...")
         logger.info("💡 Send /start command to the bot to test")
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        resolved_updates = dp.resolve_used_update_types()
+        logger.info(f"📨 Allowed updates for polling: {resolved_updates}")
+        await dp.start_polling(bot)
     except KeyboardInterrupt:
         logger.info("⏹️  Bot stopped by user")
     except Exception as e:

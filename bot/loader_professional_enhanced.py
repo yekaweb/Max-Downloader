@@ -248,37 +248,37 @@ async def get_media_info(url: str) -> Optional[Dict[str, Any]]:
             # Video formats by codec
             if vcodec != 'none' and height and filesize:
                 quality_key = f"{height}p"
-                
+                target_map = None
                 if 'h264' in vcodec.lower() or 'avc' in vcodec.lower():
-                    if quality_key not in h264_formats:
-                        h264_formats[quality_key] = {
-                            'format_id': format_id,
-                            'height': height,
-                            'vcodec': vcodec,
-                            'acodec': acodec,
-                            'filesize': filesize,
-                            'ext': ext,
-                        }
+                    target_map = h264_formats
                 elif 'av1' in vcodec.lower():
-                    if quality_key not in av1_formats:
-                        av1_formats[quality_key] = {
-                            'format_id': format_id,
-                            'height': height,
-                            'vcodec': vcodec,
-                            'acodec': acodec,
-                            'filesize': filesize,
-                            'ext': ext,
-                        }
+                    target_map = av1_formats
                 elif 'vp9' in vcodec.lower():
-                    if quality_key not in vp9_formats:
-                        vp9_formats[quality_key] = {
-                            'format_id': format_id,
-                            'height': height,
-                            'vcodec': vcodec,
-                            'acodec': acodec,
-                            'filesize': filesize,
-                            'ext': ext,
-                        }
+                    target_map = vp9_formats
+
+                if target_map is not None:
+                    candidate = {
+                        'format_id': format_id,
+                        'height': height,
+                        'vcodec': vcodec,
+                        'acodec': acodec,
+                        'filesize': filesize,
+                        'ext': ext,
+                    }
+
+                    existing = target_map.get(quality_key)
+                    if not existing:
+                        target_map[quality_key] = candidate
+                    else:
+                        # Prefer muxed formats over video-only adaptive streams
+                        existing_audio = existing.get('acodec', 'none') != 'none'
+                        candidate_audio = acodec != 'none'
+                        if candidate_audio and not existing_audio:
+                            target_map[quality_key] = candidate
+                        elif candidate_audio == existing_audio:
+                            # Prefer smaller file if same quality, but keep audio if equal
+                            if existing.get('filesize', float('inf')) > filesize:
+                                target_map[quality_key] = candidate
 
             # Pure audio formats
             if acodec != 'none' and vcodec == 'none' and filesize:
@@ -990,12 +990,17 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             codec_formats = codec_formats_map.get(codec, {})
             fmt = codec_formats.get(quality_key, {})
             format_id = fmt.get('format_id')
+            acodec = fmt.get('acodec', 'none')
             
             if format_id:
-                ydl_opts['format'] = format_id
+                if acodec == 'none':
+                    logger.info(f"Selected video-only format {format_id} for {codec} {quality_key}; merging bestaudio")
+                    ydl_opts['format'] = f"{format_id}+bestaudio/best"
+                else:
+                    ydl_opts['format'] = format_id
             else:
-                # Fallback format selection
-                ydl_opts['format'] = f'best[vcodec^={codec}]/best'
+                logger.warning(f"No exact format_id found for {codec} {quality_key}; using bestvideo+audio fallback")
+                ydl_opts['format'] = f"bestvideo[vcodec^{codec}]+bestaudio/best"
             
         else:  # audio
             quality_key = session['quality']

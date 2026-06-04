@@ -151,7 +151,7 @@ class GlassKeyboards:
                 InlineKeyboardButton(text="◀️ خروج", callback_data="admin_exit"),
             ],
             [
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -167,7 +167,7 @@ class GlassKeyboards:
                 InlineKeyboardButton(text="👑 VIP", callback_data="plan_vip"),
             ],
             [
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -187,7 +187,7 @@ class GlassKeyboards:
                 InlineKeyboardButton(text="🇸🇦 العربية", callback_data="lang_ar"),
             ],
             [
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -203,7 +203,7 @@ class GlassKeyboards:
             ]
             ,
             [
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -237,7 +237,7 @@ class GlassKeyboards:
                 InlineKeyboardButton(text="🔗 دیگر لینک ها", callback_data="platform_direct"),
             ],
             [
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)

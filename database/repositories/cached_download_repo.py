@@ -1,6 +1,6 @@
 """Repository for CachedDownload model"""
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_
 from database.models.cached_download import CachedDownload
 from datetime import datetime
 
@@ -15,9 +15,16 @@ class CachedDownloadRepository:
         return result.scalars().all()
 
     async def find_valid_by_url(self, source_url: str):
-        stmt = select(CachedDownload).where(
-            CachedDownload.source_url == source_url
-        ).order_by(CachedDownload.created_at.desc())
+        # Return cached entries that are not expired (expires_at is null or in the future)
+        now = datetime.utcnow()
+        stmt = (
+            select(CachedDownload)
+            .where(
+                CachedDownload.source_url == source_url,
+                or_(CachedDownload.expires_at == None, CachedDownload.expires_at > now),
+            )
+            .order_by(CachedDownload.created_at.desc())
+        )
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
@@ -63,6 +70,14 @@ class CachedDownloadRepository:
         stmt = update(CachedDownload).where(CachedDownload.id == cached_id).values(
             download_count=CachedDownload.download_count + 1,
             last_used_at=datetime.utcnow(),
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
+
+    async def mark_invalid(self, cached_id: int):
+        """Mark a cached download as invalid/expired so it won't be returned."""
+        stmt = update(CachedDownload).where(CachedDownload.id == cached_id).values(
+            expires_at=datetime.utcnow()
         )
         await self.db.execute(stmt)
         await self.db.commit()

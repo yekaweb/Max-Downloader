@@ -69,21 +69,40 @@ async def main():
         logger.error(traceback.format_exc())
         return
     
+    # Start polling once (no retry loop) so handlers respond promptly.
     try:
-        # Start bot polling
         logger.info("🚀 Starting bot polling...")
         logger.info("📡 Bot is listening for updates...")
         logger.info("💡 Send /start command to the bot to test")
         resolved_updates = dp.resolve_used_update_types()
         logger.info(f"📨 Allowed updates for polling: {resolved_updates}")
-        await dp.start_polling(bot)
+
+        await dp.start_polling(bot, skip_updates=True)
+
+        logger.info("⏹️  Bot polling stopped normally")
+
     except KeyboardInterrupt:
         logger.info("⏹️  Bot stopped by user")
     except Exception as e:
-        logger.error(f"❌ Bot error during polling: {e}", exc_info=True)
+        logger.critical(f"💥 Critical error during polling: {e}", exc_info=True)
     finally:
         try:
-            await bot.session.close()
+            # Attempt to close shared aiohttp session if provided by loader
+            try:
+                from bot.loader_professional_enhanced import _shared_session
+                if _shared_session is not None:
+                    await _shared_session.close()
+            except Exception:
+                pass
+
+            # If bot.session is an actual session object (not a factory), close it
+            sess = getattr(bot, "session", None)
+            if sess and not callable(sess):
+                try:
+                    await sess.close()
+                except Exception:
+                    pass
+
             logger.info("✅ Bot session closed")
         except Exception as e:
             logger.warning(f"⚠️ Error closing bot session: {e}")

@@ -52,6 +52,9 @@ class GlassKeyboards:
             ],
             [
                 InlineKeyboardButton(text="❌ انصراف", callback_data="cancel_download"),
+            ],
+            [
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -70,7 +73,7 @@ class GlassKeyboards:
                 InlineKeyboardButton(text="🏆 رتبه بندی", callback_data="leaderboard"),
             ],
             [
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -90,7 +93,7 @@ class GlassKeyboards:
             ],
             [
                 InlineKeyboardButton(text="📞 تماس با ما", callback_data="setting_contact"),
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -109,7 +112,7 @@ class GlassKeyboards:
                 InlineKeyboardButton(text="🏅 نشان ها", callback_data="profile_badges"),
             ],
             [
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -125,7 +128,7 @@ class GlassKeyboards:
             ],
             [
                 InlineKeyboardButton(text="📊 آمار", callback_data="referral_stats"),
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -146,6 +149,9 @@ class GlassKeyboards:
             [
                 InlineKeyboardButton(text="🔧 تنظیمات", callback_data="admin_settings"),
                 InlineKeyboardButton(text="◀️ خروج", callback_data="admin_exit"),
+            ],
+            [
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -179,6 +185,9 @@ class GlassKeyboards:
             [
                 InlineKeyboardButton(text="🇨🇳 中文", callback_data="lang_zh"),
                 InlineKeyboardButton(text="🇸🇦 العربية", callback_data="lang_ar"),
+            ],
+            [
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -191,6 +200,10 @@ class GlassKeyboards:
             [
                 InlineKeyboardButton(text=yes_text, callback_data=f"confirm_{action_id}"),
                 InlineKeyboardButton(text=no_text, callback_data=f"cancel_{action_id}"),
+            ]
+            ,
+            [
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)

@@ -31,6 +31,7 @@ from bot.states.download import DownloadStates
 from utils.validators import (
     is_valid_url, is_youtube_url, is_instagram_url, is_twitter_url
 )
+from bot.keyboards.inline import main_menu_kb
 
 try:
     import yt_dlp
@@ -48,6 +49,7 @@ except ImportError:
 
 # ==================== INITIALIZATION ====================
 
+# Create aiogram Bot with default session handling
 bot = Bot(token=settings.BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
@@ -104,6 +106,7 @@ def get_session(user_id: int) -> Dict[str, Any]:
             "progress_message_id": None,
             "downloading": False,
             "file_path": None,
+            "menu_stack": [],
         }
     return download_sessions[user_id]
 
@@ -145,13 +148,24 @@ def format_time_hms(seconds: int) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-async def safe_edit_message(query: CallbackQuery, text: str, kb: Optional[InlineKeyboardMarkup] = None, parse_mode: str = "HTML"):
+async def safe_edit_message(query: CallbackQuery, text: str, kb: Optional[InlineKeyboardMarkup] = None, parse_mode: str = "HTML", push: bool = True):
     """
     Safely edit callback query message
     Handles both text and photo messages
     Falls back to delete + new message if edit fails
     """
     try:
+        # Push previous message state to user's menu stack for back navigation
+        if push:
+            try:
+                session = get_session(query.from_user.id)
+                prev_text = getattr(query.message, 'text', None) or getattr(query.message, 'caption', None)
+                prev_kb = getattr(query.message, 'reply_markup', None)
+                # Only push interactive menu states (with keyboard) to stack
+                if prev_kb is not None:
+                    session['menu_stack'].append({'text': prev_text, 'kb': prev_kb})
+            except Exception:
+                pass
         # Try to edit text first (works for text messages)
         await query.message.edit_text(text, parse_mode=parse_mode, reply_markup=kb)
     except Exception as e:
@@ -616,10 +630,11 @@ async def update_progress_message(
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     """Start command"""
+    start_ts = datetime.utcnow()
     logger.info(f"✅ /start command received from user {message.from_user.id}")
     
     try:
-        from bot.keyboards.inline import main_menu_kb
+        # main_menu_kb imported at module level
         
         await message.answer(
             "🤖 <b>سلام به DLBot!</b>\n\n"
@@ -633,13 +648,20 @@ async def cmd_start(message: Message):
             parse_mode="HTML"
         )
         logger.info(f"✅ /start response sent to user {message.from_user.id}")
+        # Log handler latency
+        elapsed = (datetime.utcnow() - start_ts).total_seconds() * 1000
+        logger.info(f"⏱ /start handler latency: {elapsed:.0f} ms for user {message.from_user.id}")
     except Exception as e:
         logger.error(f"❌ Error in cmd_start: {e}")
-        await message.answer(
-            "❌ خطا در ارسال پیام شروع\n"
-            f"جزئیات: {str(e)[:100]}",
-            parse_mode="HTML"
-        )
+        # Try a lightweight fallback reply; if that also fails, log and skip.
+        try:
+            await message.answer(
+                "❌ خطا در ارسال پیام شروع\n"
+                f"جزئیات: {str(e)[:100]}",
+                parse_mode="HTML"
+            )
+        except Exception as e2:
+            logger.error(f"❌ Failed to send fallback /start reply: {e2}")
 
 
 @dp.message(Command("download"))
@@ -1308,7 +1330,39 @@ async def handle_back_main(query: CallbackQuery):
         "• 🎵 TikTok\n\n"
         "برای شروع، یک لینک ارسال کنید یا از دکمه‌های زیر استفاده کنید:"
     )
-    await safe_edit_message(query, text, main_menu_kb())
+    await safe_edit_message(query, text, main_menu_kb(), push=False)
+
+
+@dp.callback_query(F.data == "back_prev")
+async def handle_back_prev(query: CallbackQuery):
+    """Handle generic back to previous menu using session menu_stack"""
+    await query.answer()
+    session = get_session(query.from_user.id)
+    stack = session.get('menu_stack', [])
+    if not stack:
+        # Fallback to main menu
+        from bot.keyboards.inline import main_menu_kb
+        text = (
+            "🤖 <b>سلام به DLBot!</b>\n\n"
+            "دانلود‌کننده حرفه‌ای برای:\n"
+            "• 🎥 YouTube\n"
+            "• 📸 Instagram\n"
+            "• 🐦 Twitter/X\n"
+            "• 🎵 TikTok\n\n"
+            "برای شروع، یک لینک ارسال کنید یا از دکمه‌های زیر استفاده کنید:"
+        )
+        await safe_edit_message(query, text, main_menu_kb(), push=False)
+        return
+
+    prev = stack.pop()
+    text = prev.get('text') or ""
+    kb = prev.get('kb')
+    # If previous kb is None, fallback to main
+    if not kb and not text:
+        from bot.keyboards.inline import main_menu_kb
+        await safe_edit_message(query, text, main_menu_kb(), push=False)
+    else:
+        await safe_edit_message(query, text, kb, push=False)
 
 
 # ==================== RUN ====================

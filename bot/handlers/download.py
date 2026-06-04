@@ -82,4 +82,65 @@ async def handle_url(message: types.Message, state: FSMContext, session: AsyncSe
     )
 
 
+# -------------------- Cached-file actions --------------------
+from aiogram import F
+from aiogram.types import CallbackQuery
+from database.models.cached_download import CachedDownload
+
+
+@router.callback_query(DownloadStates.viewing_cached_files, F.data.startswith("use_cached:"))
+async def use_cached_file(query: CallbackQuery, state: FSMContext, session: AsyncSession):
+    """Send a previously cached Telegram file_id to the user without re-downloading."""
+    try:
+        _, id_str = query.data.split(":", 1)
+        cached_id = int(id_str)
+
+        # Load cached entry
+        cd: CachedDownload | None = await session.get(CachedDownload, cached_id)
+        if not cd:
+            await query.answer("❌ فایل کش‌شده پیدا نشد", show_alert=True)
+            return
+
+        # Send cached file by file_id
+        caption = f"📦 ارسال فایل کش‌شده:\n{cd.media_title[:80]}\n{cd.quality} • {cd.file_size/1024/1024:.1f} MB"
+        try:
+            await query.message.reply_document(cd.telegram_file_id, caption=caption)
+        except Exception as e:
+            logger.exception(e)
+            # If sending the cached file failed (file_id expired or invalid), mark cache invalid
+            try:
+                repo = CachedDownloadRepository(session)
+                await repo.mark_invalid(cd.id)
+            except Exception:
+                pass
+            await query.answer("❌ خطا در ارسال فایل کش‌شده — رکورد کش غیرفعال شد", show_alert=True)
+            return
+
+        # Mark cached entry as used
+        try:
+            repo = CachedDownloadRepository(session)
+            await repo.mark_used(cached_id)
+        except Exception:
+            pass
+
+        await state.clear()
+        await query.answer("✅ فایل ارسال شد")
+
+    except Exception as e:
+        logger.exception(e)
+        await query.answer("❌ خطا داخلی", show_alert=True)
+
+
+@router.callback_query(DownloadStates.viewing_cached_files, F.data == "fresh_search")
+async def fresh_search_callback(query: CallbackQuery, state: FSMContext):
+    """User requested a fresh search — continue normal download flow."""
+    # Move user to format selection to proceed with fresh download
+    await state.set_state(DownloadStates.selecting_format_type)
+    await query.message.edit_text(
+        "🎯 نوع فایل دریافتی را انتخاب کنید:",
+        reply_markup=get_format_type_keyboard()
+    )
+    await query.answer()
+
+
 __all__ = ["router"]

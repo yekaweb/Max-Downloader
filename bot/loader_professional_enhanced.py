@@ -12,12 +12,15 @@ Complete FSM implementation with ALL specification features
 import os
 import asyncio
 import re
+import html
+import aiohttp
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta
 from enum import Enum
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
@@ -49,8 +52,8 @@ except ImportError:
 
 # ==================== INITIALIZATION ====================
 
-# Create aiogram Bot with default session handling
-bot = Bot(token=settings.BOT_TOKEN)
+# Create aiogram Bot with a longer HTTP session timeout for Telegram requests
+bot = Bot(token=settings.BOT_TOKEN, session=AiohttpSession(timeout=120))
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
@@ -97,6 +100,7 @@ def get_session(user_id: int) -> Dict[str, Any]:
     if user_id not in download_sessions:
         download_sessions[user_id] = {
             "url": None,
+            "platform": None,
             "media_info": None,
             "format_type": None,
             "quality": None,
@@ -138,11 +142,15 @@ def format_bytes_mb(bytes_val: Optional[int]) -> str:
     return f"{mb:.1f}MB"
 
 
-def format_time_hms(seconds: int) -> str:
+def format_time_hms(seconds: float) -> str:
     """Format seconds to HH:MM:SS or MM:SS"""
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    secs = seconds % 60
+    try:
+        total_seconds = int(seconds or 0)
+    except (TypeError, ValueError):
+        total_seconds = 0
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
     if hours > 0:
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
     return f"{minutes:02d}:{secs:02d}"
@@ -203,6 +211,39 @@ def get_platform_emoji(platform: str) -> str:
     return emojis.get(platform, "📺")
 
 
+def normalize_twitter_url(url: str) -> str:
+    """Normalize X/Twitter share URLs for reliable yt-dlp extraction."""
+    normalized = url.split('?')[0].rstrip('/')
+    if not normalized.startswith('http'):
+        normalized = f'https://{normalized}'
+
+    if 'x.com/i/status/' in normalized or 'twitter.com/i/status/' in normalized:
+        try:
+            headers = {
+                'User-Agent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/125.0 Safari/537.36'
+                )
+            }
+            async def _resolve():
+                async with aiohttp.ClientSession(headers=headers) as session:
+                    async with session.get(normalized, allow_redirects=True, timeout=10) as resp:
+                        return str(resp.url)
+
+            final_url = await _resolve()
+            if final_url:
+                normalized = final_url
+                logger.info(f"✅ Resolved Twitter redirect URL: {final_url}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not resolve Twitter redirect URL: {e}")
+
+    if 'x.com' in normalized:
+        normalized = normalized.replace('x.com', 'twitter.com')
+
+    return normalized
+
+
 # ==================== MEDIA INFO FETCHING ====================
 
 async def get_media_info(url: str) -> Optional[Dict[str, Any]]:
@@ -221,7 +262,17 @@ async def get_media_info(url: str) -> Optional[Dict[str, Any]]:
             'extract_flat': False,
             'writesubtitles': False,  # Don't download, just detect
             'socket_timeout': 10,
+            'http_headers': {
+                'User-Agent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/125.0 Safari/537.36'
+                )
+            },
         }
+
+        if is_twitter_url(url):
+            ydl_opts['format'] = 'bestvideo+bestaudio/best'
 
         loop = asyncio.get_event_loop()
         
@@ -553,10 +604,11 @@ async def send_progress_message(
         "uploading": "ارسال به تلگرام",
     }
 
+    safe_title = html.escape(title[:40])
     text = f"""
 {phase_icons.get(phase, "⏳")} <b>{phase_labels.get(phase, 'در حال کار')}</b>
 
-🎬 <code>{title[:40]}...</code>
+🎬 <code>{safe_title}...</code>
 
 [░░░░░░░░░░░░░░░░░░░░] 0%
 
@@ -605,10 +657,11 @@ async def update_progress_message(
         else:
             eta_str = "---"
 
+        safe_title = html.escape(title[:40])
         text = f"""
 {phase_icons.get(phase, "⬇️")} <b>{phase_labels.get(phase, 'دانلود')}</b>
 
-🎬 <code>{title[:40]}...</code>
+🎬 <code>{safe_title}...</code>
 
 [{bar}] {progress:.1f}%
 
@@ -696,7 +749,15 @@ async def handle_url_input(message: Message, state: FSMContext):
 
         session = get_session(message.from_user.id)
         session['url'] = url
-        platform = detect_platform(url)
+        session['platform'] = detect_platform(url)
+        platform = session['platform']
+
+        if platform == 'twitter':
+            normalized_url = await normalize_twitter_url(url)
+            if normalized_url != url:
+                logger.info(f"🔧 Normalized Twitter/X URL: {url} -> {normalized_url}")
+                url = normalized_url
+                session['url'] = url
 
         # Show fetching message
         progress_msg = await send_progress_message(message, "درحال دریافت اطلاعات...", phase="fetching")
@@ -728,23 +789,50 @@ async def handle_url_input(message: Message, state: FSMContext):
         views = media_info['views_str']
         uploader = media_info['uploader'][:30]
         
+        safe_title = html.escape(title)
+        safe_uploader = html.escape(uploader)
+        safe_views = html.escape(str(views))
+        safe_duration = html.escape(str(duration))
         platform_emoji = get_platform_emoji(platform) if platform else "📺"
 
         info_text = f"""
 {platform_emoji} <b>اطلاعات رسانه</b>
 
-📺 <b>نام:</b> <code>{title}</code>
-⏱ <b>مدت:</b> {duration}
-👁 <b>بازدید:</b> {views}
-👤 <b>اپلود‌کننده:</b> {uploader}
+📺 <b>نام:</b> <code>{safe_title}</code>
+⏱ <b>مدت:</b> {safe_duration}
+👁 <b>بازدید:</b> {safe_views}
+👤 <b>اپلود‌کننده:</b> {safe_uploader}
 
 ━━━━━━━━━━━━━━━━━━━━━
-
-🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>
 """
 
+        if platform != "instagram":
+            info_text += "\n🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>"
+
         await progress_msg.delete()
-        
+
+        if platform == "instagram":
+            info_text += "\n📌 <b>Instagram content will be downloaded in the best available quality and sent directly.</b>"
+            try:
+                if media_info.get('thumbnail'):
+                    await message.answer_photo(
+                        photo=media_info['thumbnail'],
+                        caption=info_text,
+                        parse_mode="HTML"
+                    )
+                else:
+                    await message.answer(info_text, parse_mode="HTML")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not send photo: {e}, sending plain text instead")
+                await message.answer(info_text, parse_mode="HTML")
+
+            # Directly download Instagram in best quality without asking for format/quality.
+            session['format_type'] = 'video'
+            session['send_as'] = 'video'
+            await state.set_state(DownloadStates.downloading)
+            await start_download(message, message.from_user.id, state)
+            return
+
         # Try to send with thumbnail
         try:
             if media_info.get('thumbnail'):
@@ -757,8 +845,8 @@ async def handle_url_input(message: Message, state: FSMContext):
             else:
                 await message.answer(info_text, reply_markup=get_format_type_kb(), parse_mode="HTML")
         except Exception as e:
-            logger.warning(f"⚠️ Could not send photo: {e}, sending text instead")
-            await message.answer(info_text, reply_markup=get_format_type_kb(), parse_mode="HTML")
+            logger.warning(f"⚠️ Could not send photo: {e}, sending plain text instead")
+            await message.answer(info_text, reply_markup=get_format_type_kb())
         
         await state.set_state(DownloadStates.selecting_format_type)
         logger.info(f"✅ Moved to selecting_format_type state")
@@ -1000,29 +1088,33 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
 
         # Add format selection
         if session['format_type'] == 'video':
-            codec = session['codec']
-            quality_key = session['quality']
-            
-            # Get the format ID for this quality+codec combo
-            codec_formats_map = {
-                'h264': media_info.get('h264_formats', {}),
-                'av1': media_info.get('av1_formats', {}),
-                'vp9': media_info.get('vp9_formats', {}),
-            }
-            codec_formats = codec_formats_map.get(codec, {})
-            fmt = codec_formats.get(quality_key, {})
-            format_id = fmt.get('format_id')
-            acodec = fmt.get('acodec', 'none')
-            
-            if format_id:
-                if acodec == 'none':
-                    logger.info(f"Selected video-only format {format_id} for {codec} {quality_key}; merging bestaudio")
-                    ydl_opts['format'] = f"{format_id}+bestaudio/best"
-                else:
-                    ydl_opts['format'] = format_id
+            if session.get('platform') == 'instagram' or not session.get('codec') or not session.get('quality'):
+                logger.info("Instagram detected or no explicit video choice provided; downloading best video+audio")
+                ydl_opts['format'] = 'bestvideo+bestaudio/best'
             else:
-                logger.warning(f"No exact format_id found for {codec} {quality_key}; using bestvideo+audio fallback")
-                ydl_opts['format'] = f"bestvideo[vcodec^{codec}]+bestaudio/best"
+                codec = session['codec']
+                quality_key = session['quality']
+                
+                # Get the format ID for this quality+codec combo
+                codec_formats_map = {
+                    'h264': media_info.get('h264_formats', {}),
+                    'av1': media_info.get('av1_formats', {}),
+                    'vp9': media_info.get('vp9_formats', {}),
+                }
+                codec_formats = codec_formats_map.get(codec, {})
+                fmt = codec_formats.get(quality_key, {})
+                format_id = fmt.get('format_id')
+                acodec = fmt.get('acodec', 'none')
+                
+                if format_id:
+                    if acodec == 'none':
+                        logger.info(f"Selected video-only format {format_id} for {codec} {quality_key}; merging bestaudio")
+                        ydl_opts['format'] = f"{format_id}+bestaudio/best"
+                    else:
+                        ydl_opts['format'] = format_id
+                else:
+                    logger.warning(f"No exact format_id found for {codec} {quality_key}; using bestvideo+audio fallback")
+                    ydl_opts['format'] = f"bestvideo[vcodec^{codec}]+bestaudio/best"
             
         else:  # audio
             quality_key = session['quality']
@@ -1130,10 +1222,14 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         # Determine the final send mode by user choice
         send_as = session.get('send_as') or ('video' if session['format_type'] == 'video' else 'file')
         is_video_send = send_as == 'video' and session['format_type'] == 'video'
+        file_ext = Path(file_path).suffix.lower()
+        can_send_as_video = is_video_send and file_ext == '.mp4'
+        if is_video_send and not can_send_as_video:
+            logger.warning(f"Selected video send mode but file extension '{file_ext}' is not MP4; sending as document for compatibility")
 
         async def send_with_aiogram():
             file_input = FSInputFile(file_path)
-            if is_video_send:
+            if can_send_as_video:
                 await bot.send_video(
                     chat_id=message.chat.id,
                     video=file_input,
@@ -1153,7 +1249,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             if not pyrogram_client.is_connected:
                 await pyrogram_client.start()
             logger.info(f"📤 Uploading large file ({file_size_mb:.1f}MB) via Pyrogram...")
-            if is_video_send:
+            if can_send_as_video:
                 await pyrogram_client.send_video(
                     chat_id=message.chat.id,
                     video=file_path,
@@ -1243,7 +1339,10 @@ async def handle_download_menu(query: CallbackQuery, state: FSMContext):
         "✅ TikTok\n"
         "✅ سایت‌های دیگر"
     )
-    await safe_edit_message(query, text)
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev")
+    ]])
+    await safe_edit_message(query, text, back_kb)
 
 
 @dp.callback_query(F.data == "profile")
@@ -1259,7 +1358,10 @@ async def handle_profile(query: CallbackQuery):
         "📦 کل دانلود: 0\n\n"
         "<i>نسخه ی کامل پروفایل به زودی...</i>"
     )
-    await safe_edit_message(query, text)
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev")
+    ]])
+    await safe_edit_message(query, text, back_kb)
 
 
 @dp.callback_query(F.data == "settings")
@@ -1274,7 +1376,10 @@ async def handle_settings(query: CallbackQuery):
         "• زبان: فارسی\n\n"
         "<i>تنظیمات پیشرفته به زودی...</i>"
     )
-    await safe_edit_message(query, text)
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev")
+    ]])
+    await safe_edit_message(query, text, back_kb)
 
 
 @dp.callback_query(F.data == "guide")
@@ -1293,7 +1398,10 @@ async def handle_guide(query: CallbackQuery):
         "7️⃣ منتظر دانلود و آپلود باشید\n\n"
         "✅ فایل برای شما ارسال می‌شود!"
     )
-    await safe_edit_message(query, text)
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev")
+    ]])
+    await safe_edit_message(query, text, back_kb)
 
 
 @dp.callback_query(F.data == "about_menu")
@@ -1313,7 +1421,10 @@ async def handle_about(query: CallbackQuery):
         "👨‍💻 <b>توسعه‌دهنده:</b> Copilot Team\n"
         "📞 <b>پشتیبانی:</b> @dlbot_support"
     )
-    await safe_edit_message(query, text)
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev")
+    ]])
+    await safe_edit_message(query, text, back_kb)
 
 
 @dp.callback_query(F.data == "back_main")

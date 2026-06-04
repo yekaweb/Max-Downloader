@@ -14,6 +14,9 @@ def get_format_type_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="❌ انصراف", callback_data="cancel_download"),
             ],
+            [
+                InlineKeyboardButton(text="◀️ برگشت", callback_data="back_prev"),
+            ],
         ]
     )
 

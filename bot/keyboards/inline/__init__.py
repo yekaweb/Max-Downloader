@@ -76,7 +76,7 @@ def download_platform_kb() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text="🔙 بازگشت به منوی اصلی",
-                    callback_data="back_main"
+                    callback_data="back_prev"
                 )
             ]
         ]
@@ -109,7 +109,7 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text="🔙 بازگشت به منوی اصلی",
-                    callback_data="back_main"
+                    callback_data="back_prev"
                 )
             ]
         ]
@@ -129,6 +129,12 @@ def language_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="🇺🇸 English",
                     callback_data="lang_en"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="◀️ بازگشت",
+                    callback_data="back_prev"
                 )
             ]
         ]

@@ -215,7 +215,7 @@ class GlassKeyboards:
         buttons = [
             [
                 InlineKeyboardButton(text="🔄 دوباره تلاش کنید", callback_data="retry"),
-                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_main"),
+                InlineKeyboardButton(text="◀️ بازگشت", callback_data="back_prev"),
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)

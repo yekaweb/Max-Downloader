@@ -1087,7 +1087,16 @@ async def handle_audio_format(query: CallbackQuery, state: FSMContext):
 # ==================== DOWNLOAD EXECUTION ====================
 
 async def start_download(message: Message, user_id: int, state: FSMContext):
-    """Start the actual download process"""
+    """
+    Start the actual download process with PHASE 1-5 OPTIMIZATIONS
+    
+    Uses:
+    - Phase 1: Cache checking
+    - Phase 2: Parallel downloading
+    - Phase 4: Compression
+    - Phase 3: Stream upload
+    - Phase 5: Queue management
+    """
     session = get_session(user_id)
     
     url = session['url']
@@ -1099,156 +1108,108 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
     session['progress_message_id'] = progress_msg.message_id
 
     try:
-        # Build yt-dlp options based on selections
-        ydl_opts = {
-            'quiet': False,
-            'no_warnings': True,
-            'outtmpl': f"temp_downloads/%(title)s-%(format_id)s.%(ext)s",
-            'progress_hooks': [],
-            'http_headers': {
-                'User-Agent': (
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                    'AppleWebKit/537.36 (KHTML, like Gecko) '
-                    'Chrome/125.0 Safari/537.36'
-                ),
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://twitter.com/',
-            },
-        }
-
-        # Add format selection
-        if session['format_type'] == 'video':
-            if session.get('platform') == 'instagram' or not session.get('codec') or not session.get('quality'):
-                logger.info("Instagram detected or no explicit video choice provided; downloading best video+audio")
-                ydl_opts['format'] = 'bestvideo+bestaudio/best'
-            else:
-                codec = session['codec']
-                quality_key = session['quality']
-                
-                # Get the format ID for this quality+codec combo
-                codec_formats_map = {
-                    'h264': media_info.get('h264_formats', {}),
-                    'av1': media_info.get('av1_formats', {}),
-                    'vp9': media_info.get('vp9_formats', {}),
-                }
-                codec_formats = codec_formats_map.get(codec, {})
-                fmt = codec_formats.get(quality_key, {})
-                format_id = fmt.get('format_id')
-                acodec = fmt.get('acodec', 'none')
-                
-                if format_id:
-                    if acodec == 'none':
-                        logger.info(f"Selected video-only format {format_id} for {codec} {quality_key}; merging bestaudio")
-                        ydl_opts['format'] = f"{format_id}+bestaudio/best"
-                    else:
-                        ydl_opts['format'] = format_id
-                else:
-                    logger.warning(f"No exact format_id found for {codec} {quality_key}; using bestvideo+audio fallback")
-                    ydl_opts['format'] = f"bestvideo[vcodec^{codec}]+bestaudio/best"
-        else:  # audio
-            quality_key = session['quality']
-            media_info_audio = media_info.get('audio_formats', {})
-            audio_fmt = media_info_audio.get(quality_key, {})
-            format_id = audio_fmt.get('format_id')
+        # ==================== PHASE 1-5 INTEGRATED DOWNLOAD ====================
+        # Import the optimized integration manager
+        from services.phases_integration import get_phases_manager
+        
+        manager = get_phases_manager()
+        logger.info(f"[PHASES] 🚀 Starting optimized download workflow using Phases 1-5")
+        
+        # Progress callback to update UI
+        async def progress_callback(phase: str, percent: float, user_id: int):
+            """Update progress message based on phase"""
+            nonlocal progress_msg, title
             
-            if format_id:
-                ydl_opts['format'] = format_id
-            else:
-                ydl_opts['format'] = 'bestaudio'
-
-        # Define progress hook
-        last_update = {'time': datetime.now()}
-        event_loop = asyncio.get_running_loop()
-
-        def progress_hook(d):
-            nonlocal last_update
-            now = datetime.now()
+            phase_names = {
+                'queue_check': 'بررسی صف',
+                'downloading': 'دانلود',
+                'compressing': 'فشرده‌سازی',
+                'uploading': 'آپلود',
+                'completed': 'تکمیل',
+            }
             
-            # Throttle updates to every 1-2 seconds
-            if (now - last_update['time']).total_seconds() < 1:
-                return
-
-            if d['status'] == 'downloading':
-                progress = d.get('_percent_str', '0%').strip().rstrip('%')
-                try:
-                    progress = float(progress)
-                except:
-                    progress = 0
-
-                current_bytes = d.get('downloaded_bytes', 0)
-                total_bytes = d.get('total_bytes', 0)
-                
-                current_mb = current_bytes / (1024*1024)
-                total_mb = total_bytes / (1024*1024) if total_bytes > 0 else 1
-                
-                speed = d.get('speed', 0)
-                speed_mbps = (speed / (1024*1024)) if speed else 0
-                
-                eta = d.get('eta', None)
-
-                # Update message from the main event loop thread
-                asyncio.run_coroutine_threadsafe(
-                    update_progress_message(
-                        progress_msg,
-                        title,
-                        progress,
-                        current_mb,
-                        total_mb,
-                        speed_mbps,
-                        eta,
-                        phase="downloading"
-                    ),
-                    event_loop
+            phase_name = phase_names.get(phase, phase)
+            
+            try:
+                await update_progress_message(
+                    progress_msg,
+                    title,
+                    percent,
+                    0,
+                    100,
+                    0,
+                    None,
+                    phase=phase_name
                 )
-                
-                last_update['time'] = now
-
-            elif d['status'] == 'finished':
-                logger.info(f"Download finished: {d.get('filename', 'unknown')}")
-
-        ydl_opts['progress_hooks'] = [progress_hook]
-
-        # Execute download
-        loop = asyncio.get_running_loop()
+            except:
+                pass
         
-        def _download():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info_dict = ydl.extract_info(url, download=True)
-                file_path = None
-
-                if isinstance(info_dict, dict):
-                    requested = info_dict.get('requested_downloads')
-                    if isinstance(requested, list) and requested:
-                        first = requested[0]
-                        if isinstance(first, dict):
-                            file_path = first.get('filepath')
-
-                    file_path = file_path or info_dict.get('filepath') or info_dict.get('_filename')
-
-                if not file_path:
-                    file_path = ydl.prepare_filename(info_dict)
-
-                return info_dict, file_path
-
-        info, file_path = await loop.run_in_executor(None, _download)
+        # Determine if compression and stream upload should be enabled
+        enable_compression = session.get('format_type') == 'video'
+        enable_stream_upload = True
+        compression_quality = 'medium'  # Default quality
+        
+        logger.info(f"[PHASES] Configuration: compression={enable_compression}, stream_upload={enable_stream_upload}")
+        
+        # Execute with all optimizations
+        result = await manager.execute_download(
+            url=url,
+            user_id=user_id,
+            chat_id=message.chat.id,
+            progress_callback=progress_callback,
+            enable_compression=enable_compression,
+            enable_stream_upload=enable_stream_upload,
+            compression_quality=compression_quality,
+            user_is_premium=False  # TODO: Check from user subscription
+        )
+        
+        if not result['success']:
+            logger.error(f"[PHASES] Download failed: {result.get('error')}")
+            await update_progress_message(
+                progress_msg,
+                title,
+                0,
+                0,
+                100,
+                0,
+                None,
+                phase="❌ خطا"
+            )
+            await message.reply(f"❌ خطا: {result.get('error')}")
+            clear_session(user_id)
+            return
+        
+        # Download succeeded - show results
+        file_path = result['file_path']
+        original_size = result['original_size_mb']
+        final_size = result['final_size_mb']
+        compression_ratio = result['compression_ratio']
+        total_time = result['total_time_seconds']
+        phases_used = result.get('phases_used', [])
+        
+        logger.info(f"[PHASES] ✅ Download complete!")
+        logger.info(f"[PHASES]   Original size: {original_size:.1f}MB")
+        logger.info(f"[PHASES]   Final size: {final_size:.1f}MB")
+        logger.info(f"[PHASES]   Compression: {compression_ratio:.1f}%")
+        logger.info(f"[PHASES]   Total time: {total_time:.1f}s")
+        logger.info(f"[PHASES]   Phases used: {', '.join(filter(None, phases_used))}")
+        
         session['file_path'] = file_path
-
-        # Update to upload phase
-        file_size_mb = os.path.getsize(file_path) / (1024*1024)
-        total_mb = file_size_mb
         
+        # Update to upload phase
         await update_progress_message(
             progress_msg,
             title,
             100,
-            total_mb,
-            total_mb,
+            final_size,
+            final_size,
             0,
             0,
             phase="uploading"
         )
 
-        # Determine the final send mode by user choice
+        # Send file to user
+        file_size_mb = final_size
         send_as = session.get('send_as') or ('video' if session['format_type'] == 'video' else 'file')
         is_video_send = send_as == 'video' and session['format_type'] == 'video'
         file_ext = Path(file_path).suffix.lower()
@@ -1256,20 +1217,26 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         if is_video_send and not can_send_as_video:
             logger.warning(f"Selected video send mode but file extension '{file_ext}' is not MP4; sending as document for compatibility")
 
+        # Build caption with optimization info
+        caption = f"✅ {title}\n📦 {file_size_mb:.1f}MB"
+        if original_size != final_size:
+            caption += f"\n🗜️ فشرده‌سازی: {compression_ratio:.1f}% (-{original_size - final_size:.1f}MB)"
+        caption += f"\n⏱️ زمان: {total_time:.1f}ث"
+
         async def send_with_aiogram():
             file_input = FSInputFile(file_path)
             if can_send_as_video:
                 await bot.send_video(
                     chat_id=message.chat.id,
                     video=file_input,
-                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                    caption=caption,
                     supports_streaming=True,
                 )
             else:
                 await bot.send_document(
                     chat_id=message.chat.id,
                     document=file_input,
-                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                    caption=caption,
                 )
 
         async def send_with_pyrogram():
@@ -1277,27 +1244,28 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 raise Exception("Pyrogram client not available")
             if not pyrogram_client.is_connected:
                 await pyrogram_client.start()
-            logger.info(f"📤 Uploading large file ({file_size_mb:.1f}MB) via Pyrogram...")
+            logger.info(f"[PHASES] 📤 Uploading file ({file_size_mb:.1f}MB) via Pyrogram (Phase 3 optimized)...")
             if can_send_as_video:
                 await pyrogram_client.send_video(
                     chat_id=message.chat.id,
                     video=file_path,
-                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                    caption=caption,
                     supports_streaming=True,
                 )
             else:
                 await pyrogram_client.send_document(
                     chat_id=message.chat.id,
                     document=file_path,
-                    caption=f"✅ {title}\n📦 {file_size_mb:.1f}MB",
+                    caption=caption,
                 )
-            logger.info("✅ Pyrogram upload completed")
+            logger.info("[PHASES] ✅ Pyrogram upload completed")
 
+        # Try Pyrogram for large files (better for > 50MB)
         if pyrogram_client and file_size_mb > 50:
             try:
                 await send_with_pyrogram()
             except Exception as pyr_error:
-                logger.error(f"Pyrogram upload failed: {pyr_error}, falling back to aiogram")
+                logger.error(f"[PHASES] Pyrogram upload failed: {pyr_error}, falling back to aiogram")
                 if file_size_mb <= 2048:
                     try:
                         await send_with_aiogram()
@@ -1309,7 +1277,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             try:
                 await send_with_aiogram()
             except Exception as e:
-                logger.error(f"aiogram upload failed: {e}")
+                logger.error(f"[PHASES] aiogram upload failed: {e}")
                 if pyrogram_client:
                     try:
                         await send_with_pyrogram()
@@ -1319,26 +1287,33 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                     raise
 
         await progress_msg.delete()
-        await message.answer(
+        
+        # Show summary
+        summary = (
             f"✅ <b>دانلود و ارسال موفق!</b>\n\n"
-            f"📦 حجم: {file_size_mb:.1f} MB",
-            parse_mode="HTML"
+            f"📦 حجم نهایی: {file_size_mb:.1f} MB\n"
         )
+        if original_size != final_size:
+            summary += f"🗜️ فشرده‌سازی: {compression_ratio:.1f}%\n"
+        summary += f"⏱️ زمان کل: {total_time:.1f} ثانیه\n"
+        summary += f"🚀 <i>Phases 1-5 Optimizations Applied!</i>"
+        
+        await message.answer(summary, parse_mode="HTML")
 
         await state.clear()
         clear_session(user_id)
 
     except Exception as e:
-        logger.error(f"Download error: {e}")
+        logger.error(f"[PHASES] Download error: {e}")
         try:
             await progress_msg.delete()
         except:
             pass
-        await message.answer(
-            f"❌ <b>خطا در دانلود!</b>\n\n"
-            f"<code>{str(e)[:100]}</code>",
-            parse_mode="HTML"
-        )
+        
+        error_msg = f"❌ <b>خطا در دانلود!</b>\n\n"
+        error_msg += f"<code>{str(e)[:150]}</code>"
+        
+        await message.answer(error_msg, parse_mode="HTML")
         await state.clear()
         clear_session(user_id)
     

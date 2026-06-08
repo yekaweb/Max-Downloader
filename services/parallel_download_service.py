@@ -3,6 +3,8 @@ PHASE 2: Parallel Download System
 مدیریت دانلود‌های همزمان (تا 3 فایل موازی)
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor

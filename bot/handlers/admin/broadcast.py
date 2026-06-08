@@ -12,7 +12,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram import types
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from database.models import User, Broadcast
+from database.models import User
 
 logger = logging.getLogger(__name__)
 

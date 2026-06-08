@@ -14,6 +14,7 @@ import asyncio
 import re
 import html
 import aiohttp
+import urllib.parse
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta
@@ -211,35 +212,52 @@ def get_platform_emoji(platform: str) -> str:
     return emojis.get(platform, "📺")
 
 
-def normalize_twitter_url(url: str) -> str:
+async def normalize_twitter_url(url: str) -> str:
     """Normalize X/Twitter share URLs for reliable yt-dlp extraction."""
     normalized = url.split('?')[0].rstrip('/')
     if not normalized.startswith('http'):
         normalized = f'https://{normalized}'
 
-    if 'x.com/i/status/' in normalized or 'twitter.com/i/status/' in normalized:
-        try:
+    parsed = urllib.parse.urlparse(normalized)
+    if parsed.netloc.endswith('x.com'):
+        normalized = normalized.replace('x.com', 'twitter.com')
+        parsed = urllib.parse.urlparse(normalized)
+
+    if '/i/status/' in parsed.path:
+        tweet_id_match = re.search(r'/i/status/(\d+)', parsed.path)
+        if tweet_id_match:
+            tweet_id = tweet_id_match.group(1)
+            # Try to fetch canonical username/status path from HTML if available
             headers = {
                 'User-Agent': (
                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                     'AppleWebKit/537.36 (KHTML, like Gecko) '
                     'Chrome/125.0 Safari/537.36'
-                )
+                ),
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://twitter.com/',
             }
-            async def _resolve():
+            try:
                 async with aiohttp.ClientSession(headers=headers) as session:
                     async with session.get(normalized, allow_redirects=True, timeout=10) as resp:
-                        return str(resp.url)
+                        body = await resp.text(errors='ignore')
+                        user_match = re.search(
+                            rf'href=["\']/(\w+)/status/{tweet_id}["\']',
+                            body
+                        )
+                        if not user_match:
+                            user_match = re.search(
+                                rf'<link[^>]+href=["\']https?://twitter\.com/(\w+)/status/{tweet_id}["\']',
+                                body
+                            )
+                        if user_match:
+                            canonical = f'https://twitter.com/{user_match.group(1)}/status/{tweet_id}'
+                            logger.info(f"✅ Resolved Twitter canonical URL: {canonical}")
+                            return canonical
+            except Exception as e:
+                logger.warning(f"⚠️ Could not resolve Twitter canonical URL: {e}")
 
-            final_url = await _resolve()
-            if final_url:
-                normalized = final_url
-                logger.info(f"✅ Resolved Twitter redirect URL: {final_url}")
-        except Exception as e:
-            logger.warning(f"⚠️ Could not resolve Twitter redirect URL: {e}")
-
-    if 'x.com' in normalized:
-        normalized = normalized.replace('x.com', 'twitter.com')
+            normalized = f'https://twitter.com/i/status/{tweet_id}'
 
     return normalized
 
@@ -267,12 +285,15 @@ async def get_media_info(url: str) -> Optional[Dict[str, Any]]:
                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                     'AppleWebKit/537.36 (KHTML, like Gecko) '
                     'Chrome/125.0 Safari/537.36'
-                )
+                ),
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://twitter.com/',
             },
         }
 
         if is_twitter_url(url):
             ydl_opts['format'] = 'bestvideo+bestaudio/best'
+            ydl_opts['prefer_insecure'] = False
 
         loop = asyncio.get_event_loop()
         
@@ -1084,6 +1105,15 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             'no_warnings': True,
             'outtmpl': f"temp_downloads/%(title)s-%(format_id)s.%(ext)s",
             'progress_hooks': [],
+            'http_headers': {
+                'User-Agent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/125.0 Safari/537.36'
+                ),
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://twitter.com/',
+            },
         }
 
         # Add format selection
@@ -1115,7 +1145,6 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 else:
                     logger.warning(f"No exact format_id found for {codec} {quality_key}; using bestvideo+audio fallback")
                     ydl_opts['format'] = f"bestvideo[vcodec^{codec}]+bestaudio/best"
-            
         else:  # audio
             quality_key = session['quality']
             media_info_audio = media_info.get('audio_formats', {})

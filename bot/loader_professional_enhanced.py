@@ -756,7 +756,7 @@ async def cmd_download(message: Message, state: FSMContext):
 
 @dp.message(DownloadStates.waiting_for_url)
 async def handle_url_input(message: Message, state: FSMContext):
-    """Handle URL input with thumbnail display"""
+    """Handle URL input with cache checking and thumbnail display"""
     try:
         url = message.text.strip()
 
@@ -779,6 +779,99 @@ async def handle_url_input(message: Message, state: FSMContext):
                 logger.info(f"🔧 Normalized Twitter/X URL: {url} -> {normalized_url}")
                 url = normalized_url
                 session['url'] = url
+
+        # Check Cache first
+        try:
+            from services.hash_service import HashService
+            from database.connection import AsyncSessionLocal
+            from services.comprehensive_cache_service import CacheService
+
+            hash_service = HashService()
+            url_hash = hash_service.generate_url_hash(url)
+            session['url_hash'] = url_hash
+
+            async with AsyncSessionLocal() as db_session:
+                cached_versions = await CacheService.get_all_cached_versions(url_hash, db_session)
+
+            if cached_versions:
+                logger.info(f"Cache hit found for hash {url_hash[:12]} with {len(cached_versions)} qualities")
+                first_cached = cached_versions[0]
+                title = first_cached.download.title if hasattr(first_cached, 'download') and first_cached.download else "Cached Content"
+                duration = first_cached.download.duration if hasattr(first_cached, 'download') and first_cached.download else 0
+                duration_str = format_time_hms(duration) if duration else "Unknown"
+                platform_emoji = get_platform_emoji(platform) if platform else "📺"
+                
+                info_text = f"""
+{platform_emoji} <b>این محتوا قبلاً دانلود شده است!</b>
+
+📺 <b>نام:</b> <code>{html.escape(title[:60])}</code>
+⏱ <b>مدت:</b> {duration_str}
+📦 کیفیت‌های آماده در آرشیو:
+"""
+                for i, q in enumerate(cached_versions, 1):
+                    size_mb = q.file_size / (1024 * 1024) if q.file_size else 0
+                    info_text += f"{i}️. <b>{html.escape(q.quality_label)}</b> ({size_mb:.1f}MB • {q.extension.upper()})\n"
+                
+                info_text += "\n🎯 <b>یکی از نسخه‌های آرشیو را برای دریافت آنی انتخاب کنید یا لینک جدید را مجدداً دانلود کنید:</b>"
+                
+                buttons = []
+                for q in cached_versions:
+                    size_mb = q.file_size / (1024 * 1024) if q.file_size else 0
+                    buttons.append([InlineKeyboardButton(
+                        text=f"📥 دریافت آنی: {q.quality_label} ({size_mb:.1f}MB)",
+                        callback_data=f"send_cached:{q.id}"
+                    )])
+                
+                buttons.append([InlineKeyboardButton(
+                    text="🔄 دانلود مجدد (نسخه تازه)",
+                    callback_data="fresh_download_search"
+                )])
+                buttons.append([InlineKeyboardButton(
+                    text="❌ انصراف",
+                    callback_data="cancel_download"
+                )])
+                
+                kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+                
+                thumbnail = first_cached.download.thumbnail_url if hasattr(first_cached, 'download') and first_cached.download else None
+                try:
+                    if thumbnail:
+                        await message.answer_photo(
+                            photo=thumbnail,
+                            caption=info_text,
+                            reply_markup=kb,
+                            parse_mode="HTML"
+                        )
+                    else:
+                        await message.answer(info_text, reply_markup=kb, parse_mode="HTML")
+                except Exception as e:
+                    logger.warning(f"Failed to send cached menu with photo: {e}")
+                    await message.answer(info_text, reply_markup=kb, parse_mode="HTML")
+                
+                await state.set_state(DownloadStates.selecting_cached_file)
+                return
+        except Exception as e:
+            logger.error(f"Error checking cache: {e}", exc_info=True)
+
+        # Fallback to fresh download if cache check fails or returns no cache
+        await run_fresh_download_flow(message, url, state)
+        
+    except Exception as e:
+        logger.error(f"❌ Error in handle_url_input: {e}")
+        await message.answer(
+            f"❌ <b>خطا غیرمنتظره!</b>\n\n"
+            f"جزئیات: {str(e)[:100]}\n\n"
+            f"لطفاً دوباره تلاش کنید.",
+            parse_mode="HTML"
+        )
+        await state.set_state(DownloadStates.waiting_for_url)
+
+
+async def run_fresh_download_flow(message: Message, url: str, state: FSMContext):
+    """Executes the standard download selection flow from URL"""
+    try:
+        session = get_session(message.from_user.id)
+        platform = session['platform']
 
         # Show fetching message
         progress_msg = await send_progress_message(message, "درحال دریافت اطلاعات...", phase="fetching")
@@ -873,7 +966,7 @@ async def handle_url_input(message: Message, state: FSMContext):
         logger.info(f"✅ Moved to selecting_format_type state")
         
     except Exception as e:
-        logger.error(f"❌ Error in handle_url_input: {e}")
+        logger.error(f"❌ Error in run_fresh_download_flow: {e}")
         await message.answer(
             f"❌ <b>خطا غیرمنتظره!</b>\n\n"
             f"جزئیات: {str(e)[:100]}\n\n"
@@ -881,6 +974,107 @@ async def handle_url_input(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         await state.set_state(DownloadStates.waiting_for_url)
+
+
+# ==================== CACHE ACTIONS HANDLERS ====================
+
+@dp.callback_query(DownloadStates.selecting_cached_file, F.data.startswith("send_cached:"))
+async def handle_send_cached(query: CallbackQuery, state: FSMContext):
+    """Deliver a cached quality instantly using telegram_file_id"""
+    await query.answer("⏳ در حال ارسال فایل...")
+    quality_id = int(query.data.split(":")[1])
+    
+    try:
+        from database.connection import AsyncSessionLocal
+        from database.repositories.cached_download_repo import CachedDownloadRepository
+        from database.models.cached_download import CachedDownload
+        
+        async with AsyncSessionLocal() as db_session:
+            repo = CachedDownloadRepository(db_session)
+            quality = await repo.get_quality_by_id(quality_id)
+            if not quality:
+                await query.message.answer("❌ این کیفیت در آرشیو یافت نشد. لطفاً مجدداً تلاش کنید.")
+                return
+            
+            download = await db_session.get(CachedDownload, quality.cache_id)
+            
+            # Send file
+            caption = f"✅ {download.title}\n📦 {quality.file_size_mb:.1f}MB\n⚡ ارسال سریع از آرشیو کش تلگرام"
+            
+            is_video = 'video' in (quality.mime_type or '').lower() or quality.extension.lower() == 'mp4'
+            
+            if is_video:
+                await bot.send_video(
+                    chat_id=query.message.chat.id,
+                    video=quality.telegram_file_id,
+                    caption=caption,
+                    supports_streaming=True
+                )
+            else:
+                await bot.send_document(
+                    chat_id=query.message.chat.id,
+                    document=quality.telegram_file_id,
+                    caption=caption
+                )
+            
+            # Update stats
+            await repo.mark_used(download.id, quality.id)
+            
+            await query.message.delete()
+            await query.message.answer(
+                "✅ <b>فایل با موفقیت ارسال شد!</b>\n\n"
+                f"⏱️ زمان پردازش: کمتر از ۱ ثانیه\n"
+                "🚀 <i>ارسال مستقیم از حافظه کش (صرفه‌جویی در حجم و زمان)</i>",
+                parse_mode="HTML"
+            )
+            await state.clear()
+            clear_session(query.from_user.id)
+            
+    except Exception as e:
+        logger.error(f"Error sending cached file_id: {e}", exc_info=True)
+        if "file_id" in str(e).lower() or "wrong file identifier" in str(e).lower():
+            await query.message.answer("⚠️ فایل ذخیره شده در تلگرام منقضی شده بود. در حال دریافت مستقیم لینک...")
+            try:
+                from database.connection import AsyncSessionLocal
+                from database.repositories.cached_download_repo import CachedDownloadRepository
+                async with AsyncSessionLocal() as db_session:
+                    repo = CachedDownloadRepository(db_session)
+                    quality = await repo.get_quality_by_id(quality_id)
+                    if quality:
+                        await repo.mark_invalid(quality.cache_id)
+            except Exception as dbe:
+                logger.error(f"Failed to invalidate cache: {dbe}")
+            
+            session = get_session(query.from_user.id)
+            url = session.get('url')
+            if url:
+                await query.message.delete()
+                await run_fresh_download_flow(query.message, url, state)
+        else:
+            await query.message.answer(f"❌ خطا در ارسال فایل: {str(e)[:100]}")
+
+
+@dp.callback_query(DownloadStates.selecting_cached_file, F.data == "fresh_download_search")
+async def handle_fresh_download_search(query: CallbackQuery, state: FSMContext):
+    """Ignore cache and proceed to fresh download flow"""
+    await query.answer()
+    session = get_session(query.from_user.id)
+    url = session.get('url')
+    if url:
+        await query.message.delete()
+        await run_fresh_download_flow(query.message, url, state)
+    else:
+        await query.message.answer("❌ خطا: آدرس لینک یافت نشد.")
+
+
+@dp.callback_query(DownloadStates.selecting_cached_file, F.data == "cancel_download")
+async def handle_cancel_download_cache(query: CallbackQuery, state: FSMContext):
+    """Cancel from cache menu"""
+    await query.answer()
+    await query.message.delete()
+    clear_session(query.from_user.id)
+    await query.message.answer("❌ عملیات لغو شد.")
+    await state.clear()
 
 
 # Handle format type selection
@@ -1226,14 +1420,14 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         async def send_with_aiogram():
             file_input = FSInputFile(file_path)
             if can_send_as_video:
-                await bot.send_video(
+                return await bot.send_video(
                     chat_id=message.chat.id,
                     video=file_input,
                     caption=caption,
                     supports_streaming=True,
                 )
             else:
-                await bot.send_document(
+                return await bot.send_document(
                     chat_id=message.chat.id,
                     document=file_input,
                     caption=caption,
@@ -1246,45 +1440,118 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 await pyrogram_client.start()
             logger.info(f"[PHASES] 📤 Uploading file ({file_size_mb:.1f}MB) via Pyrogram (Phase 3 optimized)...")
             if can_send_as_video:
-                await pyrogram_client.send_video(
+                return await pyrogram_client.send_video(
                     chat_id=message.chat.id,
                     video=file_path,
                     caption=caption,
                     supports_streaming=True,
                 )
             else:
-                await pyrogram_client.send_document(
+                return await pyrogram_client.send_document(
                     chat_id=message.chat.id,
                     document=file_path,
                     caption=caption,
                 )
-            logger.info("[PHASES] ✅ Pyrogram upload completed")
 
-        # Try Pyrogram for large files (better for > 50MB)
-        if pyrogram_client and file_size_mb > 50:
+        sent_msg = None
+        telegram_file_id = result.get('telegram_file_id')
+
+        # Check if file was already uploaded in Phase 3 stream upload
+        if telegram_file_id:
             try:
-                await send_with_pyrogram()
-            except Exception as pyr_error:
-                logger.error(f"[PHASES] Pyrogram upload failed: {pyr_error}, falling back to aiogram")
-                if file_size_mb <= 2048:
-                    try:
-                        await send_with_aiogram()
-                    except Exception as e:
-                        raise Exception(f"Upload failed: {e}")
+                logger.info(f"[PHASES] Sending already uploaded file using telegram_file_id: {telegram_file_id}")
+                if can_send_as_video:
+                    sent_msg = await bot.send_video(
+                        chat_id=message.chat.id,
+                        video=telegram_file_id,
+                        caption=caption,
+                        supports_streaming=True
+                    )
                 else:
-                    raise Exception(f"File too large: {file_size_mb:.1f}MB")
-        else:
-            try:
-                await send_with_aiogram()
+                    sent_msg = await bot.send_document(
+                        chat_id=message.chat.id,
+                        document=telegram_file_id,
+                        caption=caption
+                    )
             except Exception as e:
-                logger.error(f"[PHASES] aiogram upload failed: {e}")
-                if pyrogram_client:
-                    try:
-                        await send_with_pyrogram()
-                    except Exception as pyr_error:
-                        raise Exception(f"All uploads failed: {pyr_error}")
-                else:
-                    raise
+                logger.warning(f"[PHASES] Failed to send using file_id: {e}, falling back to direct upload")
+                telegram_file_id = None
+
+        if not telegram_file_id:
+            # Try Pyrogram for large files (better for > 50MB)
+            if pyrogram_client and file_size_mb > 50:
+                try:
+                    sent_msg = await send_with_pyrogram()
+                except Exception as pyr_error:
+                    logger.error(f"[PHASES] Pyrogram upload failed: {pyr_error}, falling back to aiogram")
+                    if file_size_mb <= 2048:
+                        try:
+                            sent_msg = await send_with_aiogram()
+                        except Exception as e:
+                            raise Exception(f"Upload failed: {e}")
+                    else:
+                        raise Exception(f"File too large: {file_size_mb:.1f}MB")
+            else:
+                try:
+                    sent_msg = await send_with_aiogram()
+                except Exception as e:
+                    logger.error(f"[PHASES] aiogram upload failed: {e}")
+                    if pyrogram_client:
+                        try:
+                            sent_msg = await send_with_pyrogram()
+                        except Exception as pyr_error:
+                            raise Exception(f"All uploads failed: {pyr_error}")
+                    else:
+                        raise
+
+        # Capture final file_id and cache the file
+        final_file_id = None
+        if sent_msg:
+            if hasattr(sent_msg, 'video') and sent_msg.video:
+                final_file_id = sent_msg.video.file_id
+            elif hasattr(sent_msg, 'document') and sent_msg.document:
+                final_file_id = sent_msg.document.file_id
+            elif hasattr(sent_msg, 'audio') and sent_msg.audio:
+                final_file_id = sent_msg.audio.file_id
+        
+        if final_file_id:
+            try:
+                from database.connection import AsyncSessionLocal
+                from services.comprehensive_cache_service import CacheService
+                
+                url_hash = session.get('url_hash')
+                if not url_hash:
+                    from services.hash_service import HashService
+                    hash_service = HashService()
+                    url_hash = hash_service.generate_url_hash(url)
+                
+                format_type = session.get('format_type', 'video')
+                quality_label = session.get('quality', 'best')
+                
+                file_info = {
+                    'platform': session.get('platform', 'unknown'),
+                    'title': media_info.get('title', 'Unknown'),
+                    'duration': media_info.get('duration', 0),
+                    'uploader': media_info.get('uploader', 'Unknown'),
+                    'thumb_url': media_info.get('thumbnail', ''),
+                    'quality': quality_label,
+                    'size': int(final_size * 1024 * 1024),
+                    'file_type': 'video/mp4' if format_type == 'video' else 'audio/mpeg',
+                    'container': file_ext.replace('.', '') if file_ext else ('mp4' if format_type == 'video' else 'mp3'),
+                    'codec': session.get('codec', 'unknown'),
+                }
+                
+                logger.info(f"💾 Saving successfully uploaded file to cache. Hash: {url_hash[:12]}...")
+                async with AsyncSessionLocal() as db_session:
+                    await CacheService.save_to_cache(
+                        url=url,
+                        url_hash=url_hash,
+                        telegram_file_id=final_file_id,
+                        file_info=file_info,
+                        session=db_session
+                    )
+            except Exception as cache_err:
+                logger.error(f"Failed to save to cache database: {cache_err}", exc_info=True)
 
         await progress_msg.delete()
         

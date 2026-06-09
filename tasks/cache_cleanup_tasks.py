@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import create_engine, select, delete, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from database.models.cached_download import CachedDownload
+from database.models.cached_download import CachedDownload, CachedQuality
 from database.repositories.cached_download_repo import CachedDownloadRepository
 from config_simple import settings
 from services.comprehensive_cache_service import CacheService
@@ -107,7 +107,7 @@ def limit_cache_size(max_size_gb: int = 5):
             async with async_session() as session:
                 # Get total size
                 size_result = await session.execute(
-                    select(func.sum(CachedDownload.file_size))
+                    select(func.sum(CachedQuality.file_size))
                 )
                 total_bytes = size_result.scalar() or 0
                 total_mb = total_bytes / (1024 * 1024)
@@ -127,7 +127,7 @@ def limit_cache_size(max_size_gb: int = 5):
                 # Get LRU entries (oldest used entries)
                 lru_result = await session.execute(
                     select(CachedDownload)
-                    .order_by(CachedDownload.last_used_at.asc())
+                    .order_by(CachedDownload.last_accessed.asc())
                     .limit(1000)  # Safety limit
                 )
                 
@@ -138,7 +138,9 @@ def limit_cache_size(max_size_gb: int = 5):
                 for entry in lru_entries:
                     if freed >= bytes_to_free:
                         break
-                    freed += entry.file_size
+                    # Sum file sizes from qualities
+                    for q in entry.qualities:
+                        freed += q.file_size or 0
                     await session.delete(entry)
                     deleted += 1
                 
@@ -199,7 +201,7 @@ def cache_statistics():
                 
                 # Total size
                 size_result = await session.execute(
-                    select(func.sum(CachedDownload.file_size))
+                    select(func.sum(CachedQuality.file_size))
                 )
                 total_bytes = size_result.scalar() or 0
                 
@@ -208,8 +210,8 @@ def cache_statistics():
                 
                 # Most popular platform
                 platform_result = await session.execute(
-                    select(CachedDownload.source_platform, func.count(CachedDownload.id))
-                    .group_by(CachedDownload.source_platform)
+                    select(CachedDownload.platform, func.count(CachedDownload.id))
+                    .group_by(CachedDownload.platform)
                     .order_by(func.count(CachedDownload.id).desc())
                     .limit(1)
                 )
@@ -217,8 +219,8 @@ def cache_statistics():
                 
                 # Most popular quality
                 quality_result = await session.execute(
-                    select(CachedDownload.quality, func.count(CachedDownload.id))
-                    .group_by(CachedDownload.quality)
+                    select(CachedQuality.quality_label, func.count(CachedDownload.id))
+                    .group_by(CachedQuality.quality_label)
                     .order_by(func.count(CachedDownload.id).desc())
                     .limit(1)
                 )

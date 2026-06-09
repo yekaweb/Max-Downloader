@@ -11,7 +11,7 @@ from .models import (
     Payment,
     Channel,
 )
-from .cached_download import CachedDownload
+from .cached_download import CachedDownload, CachedQuality
 
 __all__ = [
     "Base",
@@ -25,4 +25,5 @@ __all__ = [
     "Payment",
     "Channel",
     "CachedDownload",
+    "CachedQuality",
 ]

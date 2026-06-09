@@ -126,9 +126,10 @@ class DownloadService:
                 if cached:
                     # Return the most recent cached entry
                     entry = cached[0]
+                    first_quality = entry.qualities[0] if entry.qualities else None
                     return {
                         "cached": True,
-                        "telegram_file_id": entry.telegram_file_id,
+                        "telegram_file_id": first_quality.telegram_file_id if first_quality else None,
                         "cached_entry": entry,
                     }
             except Exception:

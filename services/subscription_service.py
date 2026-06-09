@@ -1,4 +1,5 @@
 """Subscription service"""
+from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import Subscription, Plan, User
 from sqlalchemy import select

@@ -9,7 +9,7 @@ import asyncio
 import subprocess
 import logging
 import os
-from typing import Dict, Optional, Callable, List
+from typing import Dict, Optional, Callable, List, Union
 from datetime import datetime
 from enum import Enum
 import json
@@ -147,8 +147,8 @@ class CompressionService:
         self,
         input_path: str,
         output_path: str,
-        quality: VideoQuality = VideoQuality.MEDIUM,
-        audio_quality: AudioQuality = AudioQuality.MEDIUM,
+        quality: Union[str, VideoQuality] = VideoQuality.MEDIUM,
+        audio_quality: Union[str, AudioQuality] = AudioQuality.MEDIUM,
         progress_callback: Optional[Callable] = None
     ) -> Dict:
         """
@@ -157,14 +157,25 @@ class CompressionService:
         Args:
             input_path: مسیر فایل اصلی
             output_path: مسیر فایل خروجی
-            quality: کیفیت ویدیو
-            audio_quality: کیفیت صوت
+            quality: کیفیت ویدیو یا نام کیفیت
+            audio_quality: کیفیت صوت یا نام کیفیت
             progress_callback: Callback for progress
         
         Returns:
             {'status': 'success/failed', 'compression_ratio': float, ...}
         """
         logger.info(f"[COMPRESS-V] Starting video compression: {input_path}")
+        
+        if isinstance(quality, str):
+            try:
+                quality = VideoQuality(quality)
+            except ValueError:
+                quality = VideoQuality.MEDIUM
+        if isinstance(audio_quality, str):
+            try:
+                audio_quality = AudioQuality(audio_quality)
+            except ValueError:
+                audio_quality = AudioQuality.MEDIUM
         
         file_id = input_path
         start_time = datetime.utcnow()
@@ -247,7 +258,7 @@ class CompressionService:
         self,
         input_path: str,
         output_path: str,
-        quality: AudioQuality = AudioQuality.MEDIUM,
+        quality: Union[str, AudioQuality] = AudioQuality.MEDIUM,
         progress_callback: Optional[Callable] = None
     ) -> Dict:
         """
@@ -256,13 +267,19 @@ class CompressionService:
         Args:
             input_path: مسیر فایل صوت
             output_path: مسیر خروجی
-            quality: کیفیت صوت
+            quality: کیفیت صوت یا نام کیفیت
             progress_callback: Progress callback
         
         Returns:
             Compression result dict
         """
         logger.info(f"[COMPRESS-A] Starting audio compression: {input_path}")
+        
+        if isinstance(quality, str):
+            try:
+                quality = AudioQuality(quality)
+            except ValueError:
+                quality = AudioQuality.MEDIUM
         
         file_id = input_path
         start_time = datetime.utcnow()
@@ -356,6 +373,7 @@ class CompressionService:
     ) -> Dict:
         """اجرای FFmpeg process"""
         try:
+            logger.info(f"[COMPRESS] Running FFmpeg: {' '.join(cmd)}")
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -363,18 +381,24 @@ class CompressionService:
             )
             
             stdout, stderr = await process.communicate()
+            stdout_text = stdout.decode('utf-8', errors='replace').strip() if stdout else ''
+            stderr_text = stderr.decode('utf-8', errors='replace').strip() if stderr else ''
             
             if process.returncode == 0:
+                if stdout_text:
+                    logger.debug(f"[COMPRESS] FFmpeg stdout: {stdout_text}")
+                if stderr_text:
+                    logger.debug(f"[COMPRESS] FFmpeg stderr: {stderr_text}")
                 logger.info(f"[COMPRESS] FFmpeg succeeded")
                 return {'status': 'success'}
             else:
-                error_msg = stderr.decode() if stderr else "Unknown error"
+                error_msg = stderr_text or stdout_text or f"FFmpeg failed with return code {process.returncode}"
                 logger.error(f"[COMPRESS] FFmpeg failed: {error_msg}")
                 return {'status': 'failed', 'error': error_msg}
         
         except Exception as e:
-            logger.error(f"[COMPRESS] Subprocess error: {e}")
-            return {'status': 'failed', 'error': str(e)}
+            logger.exception(f"[COMPRESS] Subprocess error while running FFmpeg")
+            return {'status': 'failed', 'error': f"{type(e).__name__}: {e}"}
     
     async def get_compression_status(self, file_id: str) -> Optional[Dict]:
         """وضعیت فشرده‌سازی فایل"""

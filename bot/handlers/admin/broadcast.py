@@ -1,6 +1,6 @@
 """Enhanced admin broadcast handler - Mass messaging with scheduling and targeting"""
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 import asyncio
 from datetime import datetime, timedelta
 

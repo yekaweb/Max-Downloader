@@ -137,7 +137,12 @@ class PhasesIntegrationManager:
             download_result = await self._phase2_download(
                 url=url,
                 progress_callback=lambda p: asyncio.create_task(
-                    self._progress(progress_callback, "downloading", 5 + p * 30, user_id)
+                    self._progress(
+                        progress_callback,
+                        "downloading",
+                        5 + self._normalize_progress_value(p) * 0.3,
+                        user_id
+                    )
                 )
             )
             
@@ -149,6 +154,7 @@ class PhasesIntegrationManager:
             
             file_path = download_result['file_path']
             original_size_mb = download_result.get('file_size_mb', 0)
+            phases_used = ['Phase 1 (Cache)', 'Phase 2 (Parallel Download)']
             
             logger.info(f"[PHASES] Downloaded: {file_path} ({original_size_mb:.1f}MB)")
             
@@ -167,7 +173,12 @@ class PhasesIntegrationManager:
                     output_path=output_path,
                     quality=compression_quality,
                     progress_callback=lambda p: asyncio.create_task(
-                        self._progress(progress_callback, "compressing", 40 + p * 20, user_id)
+                        self._progress(
+                            progress_callback,
+                            "compressing",
+                            40 + self._normalize_progress_value(p) * 0.2,
+                            user_id
+                        )
                     )
                 )
                 
@@ -175,6 +186,7 @@ class PhasesIntegrationManager:
                     final_size_mb = compress_result.get('output_size_mb', final_size_mb)
                     compression_ratio = ((original_size_mb - final_size_mb) / original_size_mb) * 100
                     file_path = output_path
+                    phases_used.append('Phase 4 (Compression)')
                     logger.info(
                         f"[PHASES] Compression complete: "
                         f"{original_size_mb:.1f}MB → {final_size_mb:.1f}MB "
@@ -186,6 +198,7 @@ class PhasesIntegrationManager:
             # Phase 3: Upload with optimization (optional)
             telegram_file_id = None
             if enable_stream_upload and self.stream_upload_service:
+                phases_used.append('Phase 3 (Stream Upload)')
                 await self._progress(progress_callback, "uploading", 65, user_id)
                 logger.info(f"[PHASES] Starting optimized upload: {file_path}")
                 
@@ -193,7 +206,12 @@ class PhasesIntegrationManager:
                     file_path=file_path,
                     chat_id=chat_id,
                     progress_callback=lambda p: asyncio.create_task(
-                        self._progress(progress_callback, "uploading", 65 + p * 30, user_id)
+                        self._progress(
+                            progress_callback,
+                            "uploading",
+                            65 + self._normalize_progress_value(p) * 0.3,
+                            user_id
+                        )
                     )
                 )
                 
@@ -215,12 +233,7 @@ class PhasesIntegrationManager:
                 'final_size_mb': final_size_mb,
                 'compression_ratio': compression_ratio,
                 'total_time_seconds': elapsed,
-                'phases_used': [
-                    'Phase 1 (Cache)' if True else None,
-                    'Phase 2 (Parallel Download)',
-                    'Phase 4 (Compression)' if enable_compression else None,
-                    'Phase 3 (Stream Upload)' if enable_stream_upload else None,
-                ]
+                'phases_used': phases_used
             }
             
         except Exception as e:
@@ -229,6 +242,36 @@ class PhasesIntegrationManager:
                 'success': False,
                 'error': str(e)
             }
+
+    def _normalize_progress_value(self, p) -> float:
+        """Normalize progress values to a 0-100 percent scale."""
+        if isinstance(p, dict):
+            if 'progress' in p:
+                val = p.get('progress', 0)
+            elif 'percent' in p:
+                val = p.get('percent', 0)
+            elif 'downloaded_bytes' in p and p.get('total_bytes'):
+                try:
+                    return float(p.get('downloaded_bytes', 0)) / float(p.get('total_bytes', 1)) * 100
+                except Exception:
+                    return 0.0
+            else:
+                return 0.0
+            if isinstance(val, str):
+                try:
+                    return float(val.strip().replace('%', ''))
+                except Exception:
+                    return 0.0
+            try:
+                val = float(val)
+                return val * 100 if 0 <= val <= 1 else val
+            except Exception:
+                return 0.0
+        try:
+            value = float(p)
+            return value * 100 if 0 <= value <= 1 else value
+        except Exception:
+            return 0.0
 
     async def _phase2_download(
         self,
@@ -243,7 +286,7 @@ class PhasesIntegrationManager:
         if not self.download_manager:
             # Fallback to basic download
             logger.warning("[PHASES] Using fallback basic download (ParallelDownloadManager not available)")
-            return await self._fallback_download(url)
+            return await self._fallback_download(url, progress_callback)
         
         try:
             result = await self.download_manager.download(
@@ -253,7 +296,7 @@ class PhasesIntegrationManager:
             return result
         except Exception as e:
             logger.warning(f"[PHASES] ParallelDownloadManager failed: {e}, using fallback")
-            return await self._fallback_download(url)
+            return await self._fallback_download(url, progress_callback)
 
     async def _phase4_compress(
         self,
@@ -278,6 +321,12 @@ class PhasesIntegrationManager:
                 quality=quality,
                 progress_callback=progress_callback
             )
+            
+            if result.get('status') != 'success':
+                return {
+                    'success': False,
+                    'error': result.get('error', 'Compression failed')
+                }
             
             # Calculate output size
             output_size_mb = 0
@@ -329,7 +378,7 @@ class PhasesIntegrationManager:
             logger.error(f"[PHASES] Stream upload error: {e}")
             return {'success': False, 'error': str(e)}
 
-    async def _fallback_download(self, url: str) -> Dict[str, Any]:
+    async def _fallback_download(self, url: str, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
         """Fallback basic download using yt-dlp"""
         try:
             import yt_dlp
@@ -341,6 +390,10 @@ class PhasesIntegrationManager:
                 'outtmpl': 'temp_downloads/%(title)s-%(format_id)s.%(ext)s',
                 'format': 'bestvideo+bestaudio/best',
             }
+            
+            if progress_callback:
+                loop = asyncio.get_running_loop()
+                ydl_opts['progress_hooks'] = [self._create_yt_dlp_progress_hook(progress_callback, loop)]
             
             loop = asyncio.get_running_loop()
             
@@ -361,6 +414,46 @@ class PhasesIntegrationManager:
         except Exception as e:
             logger.error(f"[PHASES] Fallback download failed: {e}")
             return {'success': False, 'error': str(e)}
+
+    def _create_yt_dlp_progress_hook(self, callback: Callable, loop: asyncio.AbstractEventLoop):
+        def hook(d):
+            status = d.get('status')
+            if status == 'downloading':
+                progress = 0.0
+                if d.get('total_bytes'):
+                    try:
+                        progress = float(d.get('downloaded_bytes', 0)) / float(d.get('total_bytes')) * 100
+                    except Exception:
+                        progress = 0.0
+                elif d.get('_percent_str'):
+                    try:
+                        progress = float(str(d.get('_percent_str')).strip().replace('%', ''))
+                    except Exception:
+                        progress = 0.0
+
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        callback({
+                            'status': 'downloading',
+                            'progress': progress,
+                            'downloaded_bytes': d.get('downloaded_bytes', 0),
+                            'total_bytes': d.get('total_bytes', 0),
+                            'speed': d.get('speed'),
+                            'eta': d.get('eta')
+                        }), loop
+                    )
+                except Exception as e:
+                    logger.warning(f"[PHASES] Progress hook error: {e}")
+            elif status == 'finished':
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        callback({'status': 'finished', 'progress': 100}),
+                        loop
+                    )
+                except Exception as e:
+                    logger.warning(f"[PHASES] Finished hook error: {e}")
+
+        return hook
 
     async def _progress(
         self,

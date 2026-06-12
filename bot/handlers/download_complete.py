@@ -20,7 +20,7 @@ from bot.keyboards.inline.download import (
     get_send_as_keyboard,
     get_audio_format_keyboard,
 )
-from config_simple import settings
+from config import settings
 from utils.progress import generate_progress_message
 
 try:

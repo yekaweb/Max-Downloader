@@ -3,7 +3,7 @@
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message
-from config_simple import settings
+from config import settings
 from services import ReferralService
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging

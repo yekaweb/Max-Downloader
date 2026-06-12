@@ -7,7 +7,7 @@ import asyncio
 import logging
 from pathlib import Path
 from loguru import logger
-from config_simple import settings
+from config import settings
 
 # Create logs directory
 Path(settings.LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
@@ -48,16 +48,16 @@ async def main():
     # Import bot components (lazy import)
     try:
         logger.info("📦 Loading bot components...")
-        from bot.loader_professional_enhanced import bot, dp
-        
+        from bot.loader import bot, dp
+
         if not bot:
             raise ImportError("Bot initialization failed - bot is None")
         if not dp:
             raise ImportError("Dispatcher initialization failed - dp is None")
-            
-        logger.info("✅ Bot components loaded successfully (Enhanced Professional Download System)")
+
+        logger.info("✅ Bot components loaded successfully")
         logger.info(f"📡 Bot username: {settings.BOT_USERNAME}")
-        
+
     except ImportError as e:
         logger.error(f"❌ Import error - Failed to load bot components: {e}")
         import traceback
@@ -87,15 +87,6 @@ async def main():
         logger.critical(f"💥 Critical error during polling: {e}", exc_info=True)
     finally:
         try:
-            # Attempt to close shared aiohttp session if provided by loader
-            try:
-                from bot.loader_professional_enhanced import _shared_session
-                if _shared_session is not None:
-                    await _shared_session.close()
-            except Exception:
-                pass
-
-            # If bot.session is an actual session object (not a factory), close it
             sess = getattr(bot, "session", None)
             if sess and not callable(sess):
                 try:

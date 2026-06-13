@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database.models import CoinTransaction, User
+from utils.db_utils import scalars_first, scalars_all, result_first
 
 
 class CoinTransactionService:
@@ -81,7 +82,7 @@ class CoinTransactionService:
                 CoinTransaction.amount > 0
             )
         )
-        row = result.first()
+        row = await result_first(result)
         
         spend_result = await self.db.execute(
             select(
@@ -91,12 +92,12 @@ class CoinTransactionService:
                 CoinTransaction.amount < 0
             )
         )
-        spend_row = spend_result.first()
+        spend_row = await result_first(spend_result)
         
         return {
             "total_transactions": row[0] or 0,
             "total_earned": row[1] or 0.0,
-            "total_spent": abs(spend_row[0]) if spend_row[0] else 0.0,
+            "total_spent": abs(spend_row[0]) if spend_row and spend_row[0] else 0.0,
         }
     
     async def spend_coins(

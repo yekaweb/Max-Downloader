@@ -6,6 +6,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Tuple
 from loguru import logger
+from utils.db_utils import scalars_first
+from services.subscription_service import SubscriptionService
 
 
 class PaymentGateway(str, Enum):
@@ -106,15 +108,21 @@ class PaymentService:
         result = await self.db.execute(
             select(Payment).where(Payment.id == payment_id)
         )
-        payment = result.scalars().first()
+        payment = await scalars_first(result)
         
         if payment:
             payment.status = "completed"
             payment.transaction_id = transaction_id
             payment.completed_at = datetime.now()
+            
+            # Activate the plan!
+            from services.subscription_service import SubscriptionService
+            sub_service = SubscriptionService(self.db)
+            await sub_service.activate_subscription(payment.user_id, payment.plan_id, duration_days=30)
+            
             await self.db.commit()
             
-            logger.info(f"Payment {payment_id} marked as completed (txn: {transaction_id})")
+            logger.info(f"Payment {payment_id} marked as completed (txn: {transaction_id}) and plan {payment.plan_id} activated")
             return payment
         
         logger.warning(f"Payment {payment_id} not found for completion")
@@ -140,7 +148,7 @@ class PaymentService:
         result = await self.db.execute(
             select(Payment).where(Payment.id == payment_id)
         )
-        payment = result.scalars().first()
+        payment = await scalars_first(result)
         
         if not payment:
             logger.warning(f"Payment {payment_id} not found for failure marking")
@@ -197,9 +205,15 @@ class PaymentService:
                     method=gateway.value
                 )
                 
-                # TODO: Call actual gateway API to create invoice
-                # invoice_url = await self._create_gateway_invoice(gateway, payment)
-                invoice_url = f"https://payment.example.com/{payment.id}"
+                if gateway == PaymentGateway.CRYPTO_BOT:
+                    invoice_url = await self._create_cryptobot_invoice(payment)
+                elif gateway == PaymentGateway.ZARINPAL:
+                    invoice_url = await self._create_zarinpal_invoice(payment)
+                elif gateway == PaymentGateway.NOW_PAYMENTS:
+                    invoice_url = await self._create_nowpayments_invoice(payment)
+                else:
+                    # Fallback for others for now
+                    invoice_url = f"https://payment.example.com/{payment.id}"
                 
                 logger.info(f"Successfully created invoice via {gateway.value}")
                 return invoice_url, gateway
@@ -213,6 +227,102 @@ class PaymentService:
         logger.error(f"All payment gateways failed. Last error: {last_error}")
         return None, None
 
+    async def _create_cryptobot_invoice(self, payment: Payment) -> str:
+        """Create invoice via Telegram CryptoBot API"""
+        from config import settings
+        import aiohttp
+        
+        if not settings.CRYPTOPAY_TOKEN:
+            raise ValueError("CRYPTOPAY_TOKEN is not configured")
+            
+        url = "https://pay.crypt.bot/api/createInvoice"
+        headers = {
+            "Crypto-Pay-API-Token": settings.CRYPTOPAY_TOKEN
+        }
+        payload = {
+            "asset": payment.currency if payment.currency in ["USDT", "TON", "BTC", "ETH", "LTC", "BNB", "TRX", "USDC"] else "USDT",
+            "amount": str(payment.amount),
+            "description": f"Subscription Plan for user {payment.user_id}",
+            "payload": f"payment_{payment.id}",
+            "expires_in": 3600  # 1 hour
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                result = await response.json()
+                if result.get("ok"):
+                    return result["result"]["pay_url"]
+                else:
+                    error_msg = result.get("error", {}).get("name", "Unknown error")
+                    raise Exception(f"CryptoBot API error: {error_msg}")
+
+    async def _create_zarinpal_invoice(self, payment: Payment) -> str:
+        """Create invoice via ZarinPal API (IRR)"""
+        from config import settings
+        import aiohttp
+        
+        if not settings.ZARINPAL_MERCHANT:
+            raise ValueError("ZARINPAL_MERCHANT is not configured")
+            
+        url = "https://api.zarinpal.com/pg/v4/payment/request.json"
+        headers = {
+            "accept": "application/json", 
+            "content-type": "application/json"
+        }
+        
+        # Assuming WEB_HOST is an external accessible URL for the callback
+        callback_url = f"http://{settings.WEB_HOST}:{settings.WEB_PORT}/payment/verify/zarinpal?payment_id={payment.id}"
+        
+        payload = {
+            "merchant_id": settings.ZARINPAL_MERCHANT,
+            "amount": int(payment.amount), # amount should be in IRR or Toman based on ZarinPal config
+            "callback_url": callback_url,
+            "description": f"Subscription Plan for user {payment.user_id}"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                result = await response.json()
+                data = result.get("data", {})
+                if data and data.get("code") == 100:
+                    authority = data.get("authority")
+                    return f"https://www.zarinpal.com/pg/StartPay/{authority}"
+                else:
+                    error_msg = result.get("errors", {}).get("message", "Unknown error")
+                    raise Exception(f"ZarinPal API error: {error_msg}")
+
+    async def _create_nowpayments_invoice(self, payment: Payment) -> str:
+        """Create invoice via NOWPayments API"""
+        from config import settings
+        import aiohttp
+        
+        if not settings.NOWPAYMENTS_KEY:
+            raise ValueError("NOWPAYMENTS_KEY is not configured")
+            
+        url = "https://api.nowpayments.io/v1/invoice"
+        headers = {
+            "x-api-key": settings.NOWPAYMENTS_KEY,
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "price_amount": payment.amount,
+            "price_currency": payment.currency,
+            "order_id": str(payment.id),
+            "order_description": f"Subscription Plan for user {payment.user_id}",
+            "ipn_callback_url": f"http://{settings.WEB_HOST}:{settings.WEB_PORT}/payment/verify/nowpayments",
+            "success_url": "https://t.me/dlbot",
+            "cancel_url": "https://t.me/dlbot"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                result = await response.json()
+                if "invoice_url" in result:
+                    return result["invoice_url"]
+                else:
+                    error_msg = result.get("message", "Unknown error")
+                    raise Exception(f"NOWPayments API error: {error_msg}")
 
 __all__ = ["PaymentService", "PaymentGateway"]
 

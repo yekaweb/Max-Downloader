@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database.models import Referral, User, CoinTransaction
 from loguru import logger
+from utils.db_utils import scalars_first, scalars_all, scalar_value
 
 
 class ReferralService:
@@ -56,7 +57,7 @@ class ReferralService:
         result = await self.db.execute(
             select(Referral).where(Referral.id == referral_id)
         )
-        referral = result.scalars().first()
+        referral = await scalars_first(result)
         
         if not referral:
             return False, "Referral not found"
@@ -92,7 +93,7 @@ class ReferralService:
             result_ref = await self.db.execute(
                 select(User).where(User.id == referral.referrer_id)
             )
-            referrer = result_ref.scalars().first()
+            referrer = await scalars_first(result_ref)
             if referrer:
                 referrer.total_coins += referrer_reward
                 referrer.referral_count += 1
@@ -104,7 +105,7 @@ class ReferralService:
             result_user = await self.db.execute(
                 select(User).where(User.id == referral.referred_user_id)
             )
-            referred_user = result_user.scalars().first()
+            referred_user = await scalars_first(result_user)
             if referred_user:
                 referred_user.total_coins += referred_reward
                 self.db.add(referred_user)
@@ -162,7 +163,7 @@ class ReferralService:
             query = query.where(Referral.status == status)
         
         result = await self.db.execute(query.order_by(Referral.created_at.desc()))
-        return result.scalars().all()
+        return await scalars_all(result)
     
     async def get_user_referral_count(self, user_id: int) -> int:
         """Get count of completed referrals for a user"""
@@ -172,14 +173,14 @@ class ReferralService:
                 Referral.status == "completed"
             )
         )
-        return result.scalar() or 0
+        return await scalar_value(result) or 0
     
     async def get_referral_by_code(self, referral_code: str):
         """Get user by referral code"""
         result = await self.db.execute(
             select(User).where(User.referral_code == referral_code)
         )
-        return result.scalars().first()
+        return await scalars_first(result)
     
     async def is_referral_valid(self, referral_code: str, current_user_id: int) -> tuple[bool, str, User]:
         """

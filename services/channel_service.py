@@ -2,6 +2,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import Channel
 from sqlalchemy import select
+from utils.db_utils import scalars_first, scalars_all
 
 
 class ChannelService:
@@ -12,7 +13,7 @@ class ChannelService:
         result = await self.db.execute(
             select(Channel).where(Channel.is_active == True)
         )
-        return result.scalars().all()
+        return await scalars_all(result)
 
     async def add_channel(self, channel_id: int, channel_name: str, invite_link: str = None) -> Channel:
         channel = Channel(
@@ -30,7 +31,7 @@ class ChannelService:
         result = await self.db.execute(
             select(Channel).where(Channel.channel_id == channel_id)
         )
-        channel = result.scalars().first()
+        channel = await scalars_first(result)
         
         if channel:
             channel.is_active = False

@@ -31,7 +31,24 @@ async def cmd_start(message: Message, session: AsyncSession = None):
         args = message.text.split()
         referral_code = args[1] if len(args) > 1 else None
         
-        welcome_msg = f"سلام {user.first_name}! به DLBot خوش آمدید. (زبان: {lang})"
+        # Create a beautiful ReplyKeyboardMarkup
+        from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+        
+        kb = [
+            [KeyboardButton(text="📥 دانلود جدید (ارسال لینک)"), KeyboardButton(text="👤 پروفایل من")],
+            [KeyboardButton(text="💳 خرید اشتراک / سکه"), KeyboardButton(text="👥 معرفی به دوستان")],
+            [KeyboardButton(text="📊 تاریخچه دانلودها"), KeyboardButton(text="🆘 راهنما / پشتیبانی")],
+            [KeyboardButton(text="⚙️ تنظیمات")]
+        ]
+        keyboard = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, input_field_placeholder="لینک خود را بفرستید...")
+        
+        # Professional welcome message
+        welcome_msg = (
+            f"👋 سلام <b>{user.first_name}</b> عزیز! به ربات <b>مکس دانلودر (Max Downloader)</b> خوش آمدید.\n\n"
+            f"🚀 <b>قدرتمندترین و سریع‌ترین ربات دانلودر تلگرام</b>\n"
+            f"شما می‌توانید لینک ویدیو یا آهنگ مورد نظر خود را از ده‌ها پلتفرم (یوتیوب، اینستاگرام، تیک‌تاک و...) ارسال کنید و آن را با بالاترین کیفیت ممکن دریافت کنید!\n\n"
+            f"برای شروع، فقط کافیست لینک خود را همینجا بفرستید 👇"
+        )
         
         # Process referral code if provided
         if referral_code and session:
@@ -55,19 +72,20 @@ async def cmd_start(message: Message, session: AsyncSession = None):
                     success, coin_msg = await ref_service.mark_referral_complete(referral.id)
                     
                     if success:
-                        welcome_msg += f"\n\n✅ {coin_msg}"
-                        welcome_msg += f"\n💰 شما و معرف شما به ترتیب 100 و 50 سکه دریافت کردید!"
+                        welcome_msg += f"\n\n🎁 <b>هدیه دعوت:</b>"
+                        welcome_msg += f"\n✅ {coin_msg}"
+                        welcome_msg += f"\n💰 شما 50 سکه رایگان دریافت کردید!"
                     else:
                         logger.warning(f"Failed to mark referral complete: {coin_msg}")
-                        welcome_msg += f"\n⚠️ {coin_msg}"
+                        welcome_msg += f"\n\n⚠️ {coin_msg}"
                 else:
-                    welcome_msg += f"\n⚠️ کد معرفی معتبر نیست: {msg}"
+                    welcome_msg += f"\n\n⚠️ کد معرفی معتبر نیست: {msg}"
                     
             except Exception as e:
                 logger.error(f"Error processing referral code: {e}")
-                welcome_msg += "\n⚠️ خطا در پردازش کد معرفی"
+                welcome_msg += "\n\n⚠️ خطا در پردازش کد معرفی"
         
-        await message.reply(welcome_msg)
+        await message.reply(welcome_msg, parse_mode="HTML", reply_markup=keyboard)
         
     except Exception as e:
         logger.error(f"Error in start handler: {e}")

@@ -47,7 +47,7 @@ class SubscriptionMiddleware(BaseMiddleware):
             sub_result = await session.execute(
                 select(Subscription).where(
                     Subscription.user_id == db_user.id,
-                    Subscription.expires_at > datetime.utcnow()
+                    Subscription.end_date > datetime.utcnow()
                 )
             )
             active_subscription = sub_result.scalars().first()
@@ -60,7 +60,7 @@ class SubscriptionMiddleware(BaseMiddleware):
             if active_subscription:
                 data["subscription_plan"] = active_subscription.plan
                 data["days_remaining"] = (
-                    active_subscription.expires_at - datetime.utcnow()
+                    active_subscription.end_date - datetime.utcnow()
                 ).days
             
         except Exception as e:

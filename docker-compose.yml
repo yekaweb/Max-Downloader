@@ -48,6 +48,7 @@ services:
     command: celery -A tasks.celery_app worker -l info --concurrency=4 -Q celery
     env_file: .env
     environment:
+      DB_TYPE: postgresql
       DB_HOST: postgres
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -91,6 +92,7 @@ services:
     command: python main.py
     env_file: .env
     environment:
+      DB_TYPE: postgresql
       DB_HOST: postgres
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -115,6 +117,7 @@ services:
     command: uvicorn web.app:app --host 0.0.0.0 --port 8000 --workers 2
     env_file: .env
     environment:
+      DB_TYPE: postgresql
       DB_HOST: postgres
       REDIS_HOST: redis
     ports:

@@ -10,8 +10,7 @@ services:
       POSTGRES_DB: ${DB_NAME:-dlbot_db}
       POSTGRES_USER: ${DB_USER:-dlbot_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,8 +28,7 @@ services:
     image: redis:7-alpine
     container_name: dlbot_redis
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
+
     volumes:
       - redis_data:/data
     healthcheck:

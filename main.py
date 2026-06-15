@@ -127,6 +127,17 @@ async def main():
         except Exception as e:
             logger.error(f"❌ Failed to start Pyrogram client: {e}")
 
+    # Initialize Database Tables
+    logger.info("🛠️ Initializing database tables...")
+    try:
+        from database.connection import engine
+        from database.models.models import Base
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("✅ Database tables verified/created successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {e}")
+
     # Start polling once (no retry loop) so handlers respond promptly.
     try:
         logger.info("🚀 Starting bot polling...")

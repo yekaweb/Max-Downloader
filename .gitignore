@@ -67,5 +67,4 @@ npm-debug.log
 
 # Docker
 *.cache
-alembic.ini
 docker-compose.override.yml

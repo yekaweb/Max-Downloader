@@ -40,11 +40,16 @@ async def cmd_start(message: Message, session: AsyncSession = None):
             [KeyboardButton(text="📊 تاریخچه دانلودها"), KeyboardButton(text="🆘 راهنما / پشتیبانی")],
             [KeyboardButton(text="⚙️ تنظیمات")]
         ]
+        
+        # Add Admin button if user is admin
+        if user_id in settings.ADMIN_IDS:
+            kb.append([KeyboardButton(text="🛠 پنل مدیریت (Admin)")])
+            
         keyboard = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, input_field_placeholder="لینک خود را بفرستید...")
         
         # Professional welcome message
         welcome_msg = (
-            f"👋 سلام <b>{user.first_name}</b> عزیز! به ربات <b>مکس دانلودر (Max Downloader)</b> خوش آمدید.\n\n"
+            f"👋 سلام <b>{user.first_name}</b> عزیز! به ربات <b>Max Youtube Downloader</b> خوش آمدید.\n\n"
             f"🚀 <b>قدرتمندترین و سریع‌ترین ربات دانلودر تلگرام</b>\n"
             f"شما می‌توانید لینک ویدیو یا آهنگ مورد نظر خود را از ده‌ها پلتفرم (یوتیوب، اینستاگرام، تیک‌تاک و...) ارسال کنید و آن را با بالاترین کیفیت ممکن دریافت کنید!\n\n"
             f"برای شروع، فقط کافیست لینک خود را همینجا بفرستید 👇"

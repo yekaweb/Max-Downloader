@@ -196,15 +196,24 @@ async def admin_panel(message: Message):
         await message.answer("❌ شما مدیر نیستید!")
         return
     
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    
     admin_text = (
-        "⚙️ **پنل مدیریت**\n\n"
-        "سلام مدیر! شما می‌توانید:\n"
-        "• مشاهده آمار\n"
-        "• ارسال پیام عمومی\n"
-        "• مدیریت کاربران"
+        "⚙️ **پنل مدیریت پیشرفته**\n\n"
+        "سلام مدیر عزیز!\n"
+        "برای دسترسی به تنظیمات کامل ربات (درگاه‌های پرداخت، زرین‌پال، مدیریت ادمین‌ها، تنظیمات پلاگین‌ها و...) "
+        "لطفاً وارد **پنل مدیریت تحت وب** شوید:\n\n"
+        "👇 روی دکمه زیر کلیک کنید تا وارد پنل شوید 👇"
     )
     
-    await message.answer(admin_text, reply_markup=admin_menu_kb())
+    # Provide link to the FastAPI web panel running on port 8000
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 ورود به پنل مدیریت (Web Panel)", url="http://135.181.198.243:8000/admin")],
+        [InlineKeyboardButton(text="📊 آمار سریع (Stats)", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="📢 ارسال پیام همگانی (Broadcast)", callback_data="broadcast_menu")],
+    ])
+    
+    await message.answer(admin_text, reply_markup=kb)
 
 
 @router.callback_query(F.data == "back_main")

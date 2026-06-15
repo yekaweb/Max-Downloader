@@ -12,6 +12,7 @@ from .coin_conversion import router as coin_conversion_router
 from .payment import router as payment_router
 from .payment_rial import router as payment_rial_router
 from .channels import router as channels_router
+from .menu import router as menu_router
 from .errors import router as errors_router
 from .admin import bonus_coins_router
 
@@ -30,6 +31,7 @@ routers = [
     payment_rial_router,
     channels_router,
     bonus_coins_router,
+    menu_router,
     errors_router,  # Must be last as it catches all messages
 ]
 

@@ -8,7 +8,7 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 from loguru import logger
-from config_simple import settings
+from config import settings
 
 
 class FileCleanup:

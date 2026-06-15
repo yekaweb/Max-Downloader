@@ -22,7 +22,7 @@ class SubscriptionMiddleware(BaseMiddleware):
         
         # Get user and session
         user = None
-        session: AsyncSession = data.get("session")
+        session: AsyncSession = data.get("db")
         
         if isinstance(event.message, Message):
             user = event.message.from_user
@@ -81,7 +81,7 @@ class ForceJoinMiddleware(BaseMiddleware):
         
         # Get user and session
         user = None
-        session: AsyncSession = data.get("session")
+        session: AsyncSession = data.get("db")
         
         if isinstance(event.message, Message):
             user = event.message.from_user
@@ -102,7 +102,7 @@ class ForceJoinMiddleware(BaseMiddleware):
             
             # Get required channels
             result = await session.execute(
-                select(Channel).where(Channel.required == True)
+                select(Channel).where(Channel.is_active == True)
             )
             required_channels = result.scalars().all()
             
@@ -117,7 +117,7 @@ class ForceJoinMiddleware(BaseMiddleware):
             for channel in required_channels:
                 try:
                     member = await bot.get_chat_member(
-                        chat_id=channel.telegram_id,
+                        chat_id=channel.channel_id,
                         user_id=user.id
                     )
                     # Check if user is not kicked or left
@@ -129,11 +129,26 @@ class ForceJoinMiddleware(BaseMiddleware):
                     all_joined = False
                     missing_channels.append(channel)
             
-            data["force_join_required"] = not all_joined
-            data["missing_channels"] = missing_channels
-            
-            # Continue handler regardless
-            # Handler will check force_join_required flag
+            if not all_joined:
+                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                buttons = []
+                for channel in missing_channels:
+                    url = channel.invite_link or (f"https://t.me/{channel.channel_username}" if channel.channel_username else "https://t.me/")
+                    buttons.append([InlineKeyboardButton(text=channel.channel_name or "عضویت در کانال", url=url)])
+                
+                # Add check button
+                buttons.append([InlineKeyboardButton(text="عضو شدم ✅", callback_data="check_join")])
+                
+                keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+                
+                msg_text = "❌ برای استفاده از ربات، ابتدا باید در کانال‌های زیر عضو شوید:"
+                
+                if isinstance(event.message, Message):
+                    await event.message.answer(msg_text, reply_markup=keyboard)
+                elif isinstance(event.callback_query, CallbackQuery):
+                    await event.callback_query.message.answer(msg_text, reply_markup=keyboard)
+                    await event.callback_query.answer()
+                return # Block handler
             
         except Exception as e:
             logger.error(f"Error in force-join middleware: {e}")

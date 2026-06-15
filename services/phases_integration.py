@@ -358,17 +358,27 @@ class PhasesIntegrationManager:
             return {'success': False, 'error': 'StreamUploadService not available'}
         
         try:
-            from aiogram import Bot
-            from config_simple import settings
+            from bot.loader import bot
             
-            bot = Bot(token=settings.BOT_TOKEN)
+            is_temp_bot = False
+            if not bot:
+                from aiogram import Bot
+                from config import settings
+                bot_instance = Bot(token=settings.BOT_TOKEN)
+                is_temp_bot = True
+            else:
+                bot_instance = bot
             
-            result = await self.stream_upload_service.stream_upload_to_telegram(
-                file_path=file_path,
-                chat_id=chat_id,
-                bot=bot,
-                progress_callback=progress_callback
-            )
+            try:
+                result = await self.stream_upload_service.stream_upload_to_telegram(
+                    file_path=file_path,
+                    chat_id=chat_id,
+                    bot=bot_instance,
+                    progress_callback=progress_callback
+                )
+            finally:
+                if is_temp_bot:
+                    await bot_instance.session.close()
             
             return {
                 'success': True,

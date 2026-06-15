@@ -1,7 +1,7 @@
 """Database connection using SQLAlchemy Async engine"""
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from config_simple import settings
+from config import settings
 
 # Use async URL for runtime
 engine = create_async_engine(settings.database_async_url, echo=False, future=True)

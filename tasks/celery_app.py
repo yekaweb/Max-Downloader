@@ -1,31 +1,23 @@
-"""Celery app configuration.
+import os
+from celery import Celery
+from config import settings
 
-This module provides a lightweight fallback when the `celery` package is
-not available (e.g., in constrained CI environments). The fallback
-exposes a minimal `celery_app` with a no-op `task` decorator so task
-modules can be imported safely.
-"""
-try:
-    from celery import Celery
-    from config_simple import settings
+# Initialize Celery app
+celery_app = Celery(
+    "dlbot_tasks",
+    broker=settings.redis_url if settings.REDIS_ENABLED else "redis://localhost:6379/0",
+    backend=settings.redis_url if settings.REDIS_ENABLED else "redis://localhost:6379/1",
+    include=["tasks.download_tasks"]
+)
 
-    celery_app = Celery(
-        "dlbot_tasks",
-        broker="redis://localhost:6379/0",
-        backend="redis://localhost:6379/1",
-    )
-
-    celery_app.conf.task_time_limit = 3600
-except Exception:
-    # Fallback shim: provide a dummy app with a no-op `task` decorator.
-    class _DummyCeleryApp:
-        def task(self, *args, **kwargs):
-            def _decorator(func):
-                return func
-
-            return _decorator
-
-
-    celery_app = _DummyCeleryApp()
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
+    enable_utc=True,
+    task_track_started=True,
+    task_time_limit=3600,
+)
 
 __all__ = ["celery_app"]

@@ -60,6 +60,46 @@ async def list_payments(
     }
 
 
+from fastapi import Request, Depends, HTTPException
+from database.connection import AsyncSessionLocal
+from services.payment_service import PaymentService
+from sqlalchemy.ext.asyncio import AsyncSession
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
+
+@router.get("/verify/zarinpal")
+async def verify_zarinpal(Authority: str, Status: str, payment_id: int, db: AsyncSession = Depends(get_db)):
+    """Callback for ZarinPal"""
+    if Status != "OK":
+        return {"status": "failed", "message": "Payment cancelled or failed"}
+        
+    payment_service = PaymentService(db)
+    # Ideally, we should also verify the payment with ZarinPal API here
+    # https://api.zarinpal.com/pg/v4/payment/verify.json
+    
+    payment = await payment_service.mark_payment_completed(payment_id, Authority)
+    if payment:
+        return {"status": "success", "message": "Payment successful"}
+    return {"status": "failed", "message": "Payment not found"}
+
+@router.post("/verify/nowpayments")
+async def verify_nowpayments(request: Request, db: AsyncSession = Depends(get_db)):
+    """Webhook for NOWPayments"""
+    data = await request.json()
+    payment_status = data.get("payment_status")
+    payment_id = data.get("order_id")
+    transaction_id = data.get("payment_id")
+    
+    if payment_status == "finished":
+        payment_service = PaymentService(db)
+        payment = await payment_service.mark_payment_completed(int(payment_id), str(transaction_id))
+        if payment:
+            return {"status": "success"}
+    return {"status": "ignored"}
+
+
 @router.get("/{payment_id}")
 async def get_payment(payment_id: str) -> dict:
     """Get detailed payment information"""

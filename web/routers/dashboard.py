@@ -4,40 +4,47 @@ from typing import Dict, Any
 
 from fastapi import APIRouter, Depends
 from datetime import datetime, timedelta
+from database.connection import AsyncSessionLocal
+from services.stats_service import StatsService
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
 
 @router.get("/overview")
-async def get_dashboard_overview(current_user: Dict[str, Any] = Depends()) -> dict:
+async def get_dashboard_overview(db: AsyncSession = Depends(get_db)) -> dict:
     """
     Get dashboard overview with key metrics
-
-    Returns:
-    - User statistics
-    - Download statistics
-    - Revenue data
-    - Server status
     """
+    stats_service = StatsService(db)
+    
+    total_users = await stats_service.get_total_users()
+    active_today = await stats_service.get_active_users_today()
+    total_downloads = await stats_service.get_total_downloads()
+    total_revenue = await stats_service.get_total_revenue()
+    
     overview = {
         "users": {
-            "total": 1250,
-            "active_today": 342,
-            "new_today": 45,
-            "premium": 238,
+            "total": total_users,
+            "active_today": active_today,
+            "new_today": 0, # Placeholder
+            "premium": 0, # Placeholder
         },
         "downloads": {
-            "total": 15420,
-            "today": 523,
-            "this_week": 2104,
-            "this_month": 8942,
+            "total": total_downloads,
+            "today": 0, # Placeholder
+            "this_week": 0,
+            "this_month": 0,
         },
         "revenue": {
-            "today": 2400.00,
-            "this_week": 18500.00,
-            "this_month": 72000.00,
+            "today": 0.0,
+            "this_week": 0.0,
+            "this_month": total_revenue,
         },
         "server": {
             "cpu_usage": 32,
@@ -141,14 +148,54 @@ async def get_users_chart_data(days: int = 7) -> dict:
 
 @router.get("/health")
 async def get_health_status() -> dict:
-    """Get server health status"""
+    """Live health check – probes Redis, DB, and Bot."""
+    from database.connection import AsyncSessionLocal
+    from config import settings
+    import time
+
+    status = {}
+    overall = "healthy"
+
+    # ── Database ────────────────────────────────────────────────────
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(__import__("sqlalchemy", fromlist=["text"]).text("SELECT 1"))
+        status["database"] = "healthy"
+    except Exception as exc:
+        logger.error(f"[Health] DB check failed: {exc}")
+        status["database"] = "unhealthy"
+        overall = "degraded"
+
+    # ── Redis ───────────────────────────────────────────────────────
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url, socket_connect_timeout=2)
+        await r.ping()
+        await r.aclose()
+        status["redis"] = "healthy"
+    except Exception as exc:
+        logger.error(f"[Health] Redis check failed: {exc}")
+        status["redis"] = "unhealthy"
+        overall = "degraded"
+
+    # ── Telegram Bot API ─────────────────────────────────────────────
+    try:
+        from bot.loader import bot
+        if bot:
+            me = await bot.get_me()
+            status["bot_api"] = f"connected (@{me.username})"
+        else:
+            status["bot_api"] = "bot not initialized"
+            overall = "degraded"
+    except Exception as exc:
+        logger.error(f"[Health] Bot check failed: {exc}")
+        status["bot_api"] = "unreachable"
+        overall = "degraded"
+
     return {
-        "database": "healthy",
-        "redis": "healthy",
-        "bot_api": "connected",
-        "pyrogram": "connected",
-        "celery": "online",
-        "last_check": datetime.now().isoformat(),
+        "status": overall,
+        "checks": status,
+        "timestamp": datetime.now().isoformat(),
     }
 
 

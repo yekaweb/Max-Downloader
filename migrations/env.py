@@ -3,7 +3,7 @@ import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.exc import ArgumentError
-from config_simple import settings
+from config import settings
 from database.models import Base
 
 config = context.config

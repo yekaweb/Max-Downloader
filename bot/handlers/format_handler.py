@@ -1,6 +1,5 @@
 """Handlers for format selection and transition to download execution."""
 
-import os
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
@@ -139,7 +138,7 @@ async def select_subtitle(query: CallbackQuery, state: FSMContext):
 
     await query.message.edit_text(
         "📤 <b>نحوه دریافت فایل را انتخاب کنید:</b>",
-        reply_markup=get_send_as_keyboard(0.0),
+        reply_markup=get_send_as_keyboard(),
         parse_mode="HTML",
     )
     await state.set_state(DownloadStates.video_selecting_send_as)

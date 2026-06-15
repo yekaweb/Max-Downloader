@@ -35,13 +35,51 @@ class InstagramDownloader(BaseDownloader):
     def __init__(self):
         """Initialize Instagram downloader"""
         self.api_available = False
+        self.client = None
+        self._last_request_time = 0
+        self._rate_limit_delay = 2.0  # seconds between requests
+        
         try:
             import instagrapi
             self.api_available = True
             self.Client = instagrapi.Client
             logger.info("Instagram instagrapi library available")
+            self._init_session()
         except ImportError:
             logger.warning("instagrapi not installed - using fallback method")
+
+    def _init_session(self):
+        """Initialize and login to Instagram session"""
+        import os
+        self.client = self.Client()
+        session_file = "instagram_session.json"
+        
+        try:
+            if os.path.exists(session_file):
+                self.client.load_settings(session_file)
+                logger.info("Loaded Instagram session from file")
+            else:
+                ig_user = os.getenv("INSTAGRAM_USERNAME")
+                ig_pass = os.getenv("INSTAGRAM_PASSWORD")
+                if ig_user and ig_pass:
+                    logger.info(f"Logging in to Instagram as {ig_user}")
+                    self.client.login(ig_user, ig_pass)
+                    self.client.dump_settings(session_file)
+                    logger.info("Instagram login successful and session saved")
+                else:
+                    logger.warning("No Instagram credentials found in environment. Using anonymous/public mode which may be rate-limited.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Instagram session: {e}")
+
+    async def _rate_limit(self):
+        """Apply basic rate limiting"""
+        import time
+        import asyncio
+        now = time.time()
+        elapsed = now - self._last_request_time
+        if elapsed < self._rate_limit_delay:
+            await asyncio.sleep(self._rate_limit_delay - elapsed)
+        self._last_request_time = time.time()
     
     @classmethod
     def can_handle(cls, url: str) -> bool:
@@ -92,11 +130,11 @@ class InstagramDownloader(BaseDownloader):
                 extra={"platform": "instagram", "media_id": media_id}
             )
             
-            if self.api_available:
+            if self.api_available and self.client:
                 try:
+                    await self._rate_limit()
                     # Try to fetch real metadata
-                    client = self.Client()
-                    media = client.media_info(int(media_id))
+                    media = self.client.media_info(int(media_id))
                     media_info.title = media.caption or f"Instagram Post {media_id}"
                     media_info.duration = getattr(media, 'video_duration', 0)
                     media_info.formats = self._parse_formats(media)
@@ -131,26 +169,27 @@ class InstagramDownloader(BaseDownloader):
             # Create output directory
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             
-            if self.api_available:
+            if self.api_available and self.client:
                 try:
-                    client = self.Client()
-                    media = client.media_info(int(media_id))
+                    await self._rate_limit()
+                    media = self.client.media_info(int(media_id))
                     
                     if media.media_type == 1:  # Photo
-                        file_path = client.photo_download(int(media_id), folder=output_path)
+                        file_path = self.client.photo_download(int(media_id), folder=output_path)
                     elif media.media_type == 2:  # Video/Reel
-                        file_path = client.video_download(int(media_id), folder=output_path)
+                        file_path = self.client.video_download(int(media_id), folder=output_path)
                     elif media.media_type == 8:  # Carousel
                         # Download carousel items
                         items = media.carousel_media
                         file_paths = []
                         for idx, item in enumerate(items):
+                            await self._rate_limit()
                             if item.media_type == 1:
-                                path = client.photo_download(item.pk, folder=output_path)
+                                path = self.client.photo_download(item.pk, folder=output_path)
                             else:
-                                path = client.video_download(item.pk, folder=output_path)
+                                path = self.client.video_download(item.pk, folder=output_path)
                             file_paths.append(path)
-                        return file_paths[0] if file_paths else None
+                        return str(file_paths[0]) if file_paths else None
                     else:
                         logger.warning(f"Unknown media type: {media.media_type}")
                         return None

@@ -6,7 +6,7 @@ from services.cache_service import cache_get, cache_set
 
 
 class RateLimitMiddleware(BaseMiddleware):
-    def __init__(self, calls: int = 30, period: int = 60):
+    def __init__(self, calls: int = 20, period: int = 60):
         self.calls = calls
         self.period = period
 
@@ -16,12 +16,19 @@ class RateLimitMiddleware(BaseMiddleware):
         event: Update,
         data: Dict[str, Any],
     ) -> Any:
-        message = event.message
         
-        if not message or not message.from_user:
+        # Only rate limit messages and callbacks
+        user_id = None
+        if event.message and event.message.from_user:
+            user_id = event.message.from_user.id
+            reply_func = event.message.reply
+        elif event.callback_query and event.callback_query.from_user:
+            user_id = event.callback_query.from_user.id
+            reply_func = event.callback_query.answer
+        
+        if not user_id:
             return await handler(event, data)
         
-        user_id = message.from_user.id
         key = f"rate_limit:{user_id}"
         
         count = await cache_get(key)
@@ -29,7 +36,11 @@ class RateLimitMiddleware(BaseMiddleware):
         
         if count >= self.calls:
             # Rate limited
-            return  # Silently ignore
+            try:
+                await reply_func("⏱ شما بیش از حد مجاز درخواست داده‌اید. لطفاً کمی صبر کنید.")
+            except:
+                pass
+            return  # Ignore the update
         
         await cache_set(key, count + 1, ttl=self.period)
         return await handler(event, data)

@@ -5,10 +5,11 @@ Integrate caching with FSM download flow
 
 import os
 import asyncio
-from aiogram import F
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import StateFilter
+from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
 
 from bot.states.download import DownloadStates
@@ -20,6 +21,61 @@ from bot.keyboards.inline.cached_files import (
 from utils.cache_handler import CacheManager, format_cached_list_message
 from utils.file_cleanup import FileCleanup
 from utils.format_sizes import get_exact_format_sizes
+from database.models.cached_download import CachedDownload
+
+router = Router()
+
+
+@router.callback_query(F.data.startswith("send_cached:"))
+async def send_cached(query: CallbackQuery, state: FSMContext, db_session: AsyncSession):
+    """Send a cached file to the user using telegram file_id."""
+    await query.answer("⏳ در حال ارسال فایل کش‌شده...")
+    try:
+        cache_id = int(query.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await query.answer("❌ داده نامعتبر", show_alert=True)
+        return
+
+    cached = await db_session.get(CachedDownload, cache_id)
+    if not cached or not cached.telegram_file_id:
+        await query.answer("❌ فایل کش‌شده یافت نشد", show_alert=True)
+        return
+
+    caption = (
+        f"✅ {cached.media_title[:50]}\n"
+        f"💾 {cached.file_size / (1024*1024):.1f} MB"
+    )
+
+    try:
+        if "video" in (cached.file_type or "").lower():
+            await query.message.answer_video(
+                cached.telegram_file_id,
+                caption=caption,
+            )
+        else:
+            await query.message.answer_document(
+                cached.telegram_file_id,
+                caption=caption,
+            )
+
+        cache_manager = CacheManager(db_session)
+        await cache_manager.increment_usage_count(cache_id)
+        await query.answer("✅ فایل ارسال شد")
+
+    except Exception as exc:
+        logger.error(f"Error sending cached file: {exc}")
+        await query.answer("❌ خطا در ارسال فایل کش‌شده", show_alert=True)
+
+
+@router.callback_query(F.data == "fresh_download_search")
+async def fresh_download_search(query: CallbackQuery, state: FSMContext):
+    """Switch from cache flow to fresh download flow."""
+    await query.answer()
+    await query.message.answer(
+        "🔄 در حال آماده‌سازی دانلود تازه. لطفاً لینک جدید یا همان لینک موجود را ارسال کنید."
+    )
+    await state.clear()
+
 
 
 async def check_and_show_cache(

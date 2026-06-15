@@ -78,11 +78,11 @@ humanize==4.9.0
 APScheduler==3.10.4
 
 # ============================================================================
-# TESTING (Optional - install separately if needed)
+# TESTING
 # ============================================================================
-# pytest==7.4.3
-# pytest-asyncio==0.23.2
-# pytest-cov==4.1.0
+pytest==7.4.3
+pytest-asyncio==0.23.2
+pytest-cov==4.1.0
 
 # ============================================================================
 # CODE QUALITY (Optional - install separately if needed)

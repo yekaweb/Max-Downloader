@@ -5,29 +5,65 @@ Professional Telegram Downloader Bot
 
 import asyncio
 import logging
+import sys
 from pathlib import Path
 from loguru import logger
 from config import settings
 
-# Create logs directory
-Path(settings.LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
+# ── Create logs directory ────────────────────────────────────────────────────
+log_dir = Path(settings.LOG_FILE).parent
+log_dir.mkdir(parents=True, exist_ok=True)
 
-# Remove default logger
-logging.getLogger().handlers = []
+# ── Bridge standard logging → loguru ────────────────────────────────────────
+class _InterceptHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord):
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+        frame, depth = logging.currentframe(), 2
+        while frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
-# Configure loguru
+logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
+for _log in ("uvicorn", "uvicorn.error", "uvicorn.access", "aiogram", "sqlalchemy.engine"):
+    logging.getLogger(_log).handlers = [_InterceptHandler()]
+
+# ── Remove default loguru sink ────────────────────────────────────────────────
 logger.remove()
+
+# Sink 1: Console (coloured, human-readable)
 logger.add(
-    str(settings.LOG_FILE),
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-    rotation="500 MB",
-    retention="7 days",
+    sys.stderr,
+    format="<green>{time:HH:mm:ss}</green> | <level>{level:<8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     level=settings.LOG_LEVEL,
+    colorize=True,
 )
+
+# Sink 2: Rotating daily log file (all levels)
 logger.add(
-    lambda msg: print(msg.rstrip()),  # Enable console output for debugging
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}",
-    level=settings.LOG_LEVEL,
+    str(log_dir / "dlbot_{time:YYYY-MM-DD}.log"),
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{function}:{line} - {message}",
+    rotation="00:00",      # New file each day
+    retention="14 days",   # Keep 2 weeks
+    compression="zip",     # Compress old files
+    level="DEBUG",
+    enqueue=True,          # Thread-safe async writing
+)
+
+# Sink 3: Separate ERROR-only file for alerting / monitoring
+logger.add(
+    str(log_dir / "dlbot_errors.log"),
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{function}:{line} - {message}\n{exception}",
+    rotation="100 MB",
+    retention="30 days",
+    compression="zip",
+    level="ERROR",
+    enqueue=True,
+    backtrace=True,   # Full traceback in errors
+    diagnose=False,   # ← Security: disable variable values in tracebacks (production)
 )
 
 
@@ -69,6 +105,28 @@ async def main():
         logger.error(traceback.format_exc())
         return
     
+    # Initialize Pyrogram
+    pyrogram_client = None
+    if settings.PYROGRAM_APP_ID and settings.PYROGRAM_APP_HASH:
+        from pyrogram import Client
+        logger.info("🚀 Initializing Pyrogram client for large file uploads...")
+        try:
+            pyrogram_client = Client(
+                name=settings.PYROGRAM_SESSION_NAME,
+                api_id=settings.PYROGRAM_APP_ID,
+                api_hash=settings.PYROGRAM_APP_HASH,
+                bot_token=settings.BOT_TOKEN,
+                in_memory=True
+            )
+            await pyrogram_client.start()
+            logger.info("✅ Pyrogram client started successfully")
+            
+            # Make it globally accessible for handlers if needed
+            import bot.loader as bot_loader
+            bot_loader.pyrogram_client = pyrogram_client
+        except Exception as e:
+            logger.error(f"❌ Failed to start Pyrogram client: {e}")
+
     # Start polling once (no retry loop) so handlers respond promptly.
     try:
         logger.info("🚀 Starting bot polling...")
@@ -97,6 +155,13 @@ async def main():
             logger.info("✅ Bot session closed")
         except Exception as e:
             logger.warning(f"⚠️ Error closing bot session: {e}")
+            
+        try:
+            if pyrogram_client and pyrogram_client.is_initialized:
+                logger.info("⏹️ Stopping Pyrogram client...")
+                await pyrogram_client.stop()
+        except Exception as e:
+            logger.warning(f"⚠️ Error stopping Pyrogram client: {e}")
 
 
 if __name__ == "__main__":

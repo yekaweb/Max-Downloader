@@ -22,6 +22,7 @@ from bot.keyboards.inline.download import (
 )
 from config import settings
 from utils.progress import generate_progress_message
+from utils.safe_error import safe_user_message
 
 try:
     import yt_dlp
@@ -367,8 +368,36 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         if os.path.exists(filename):
             file_size = os.path.getsize(filename)
             file_size_mb = file_size / (1024 * 1024)
-            
-            # Check Telegram file size limit (50MB practical, 2GB theoretical)
+            final_filename = filename
+
+            # --- Adaptive Compression ---
+            # If video is larger than 20MB, try to compress it
+            if format_type == "video" and file_size_mb > 20:
+                try:
+                    await progress_msg.edit_text(
+                        "⚙️ در حال فشرده‌سازی هوشمند...\nاین عملیات ممکن است چند دقیقه طول بکشد.",
+                        parse_mode="HTML"
+                    )
+                    from services.compression_service import AdaptiveCompression
+                    adaptive = AdaptiveCompression()
+                    compressed_path = filename.rsplit(".", 1)[0] + "_compressed.mp4"
+                    result = await adaptive.auto_compress(
+                        file_path=filename,
+                        output_path=compressed_path,
+                        target_size_mb=48,  # Keep under Telegram limit
+                        device_type="mobile",
+                        connection="4g"
+                    )
+                    if result.get("status") == "success" and os.path.exists(compressed_path):
+                        os.remove(filename)
+                        final_filename = compressed_path
+                        file_size = os.path.getsize(final_filename)
+                        file_size_mb = file_size / (1024 * 1024)
+                except Exception as compress_err:
+                    # Compression failed, continue with original file
+                    pass
+
+            # Check Telegram file size limit
             if file_size > 50 * 1024 * 1024:
                 await progress_msg.delete()
                 await message.answer(
@@ -377,7 +406,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                     f"حد مجاز: 50 MB"
                 )
                 try:
-                    os.remove(filename)
+                    os.remove(final_filename)
                 except:
                     pass
             else:
@@ -392,12 +421,12 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 try:
                     if send_as == "video" and format_type == "video":
                         await message.reply_video(
-                            FSInputFile(filename),
+                            FSInputFile(final_filename),
                             caption=caption
                         )
                     else:
                         await message.reply_document(
-                            FSInputFile(filename),
+                            FSInputFile(final_filename),
                             caption=caption
                         )
                 except Exception as e:
@@ -411,7 +440,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 
                 # Cleanup temp file
                 try:
-                    os.remove(filename)
+                    os.remove(final_filename)
                 except:
                     pass
         else:
@@ -420,13 +449,10 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
     except Exception as e:
         try:
             await progress_msg.delete()
-        except:
+        except Exception:
             pass
         
-        await message.answer(
-            f"❌ **خطا در دانلود**\n\n"
-            f"مشکل: {str(e)[:100]}"
-        )
+        await message.answer(safe_user_message(e, context=f"download url={url}"))
     
     finally:
         # Cleanup

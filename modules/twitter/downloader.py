@@ -149,12 +149,22 @@ class TwitterDownloader(BaseDownloader):
     @staticmethod
     def _normalize_url(url: str) -> str:
         """Normalize Twitter URL"""
-        url = url.split('?')[0].rstrip('/')
+        import urllib.parse
+        
+        # Parse URL to cleanly strip query params and handle domains
         if not url.startswith('http'):
             url = f"https://{url}"
-        # Normalize x.com to twitter.com for consistency
-        url = url.replace('x.com', 'twitter.com')
-        return url
+            
+        parsed = urllib.parse.urlparse(url)
+        netloc = parsed.netloc.lower()
+        
+        # Normalize domains
+        if netloc in ['x.com', 'www.x.com', 'vxtwitter.com', 'fxtwitter.com']:
+            netloc = 'twitter.com'
+            
+        # Reconstruct without query parameters
+        normalized = f"{parsed.scheme}://{netloc}{parsed.path}"
+        return normalized.rstrip('/')
     
     @staticmethod
     def _extract_tweet_id(url: str) -> Optional[str]:

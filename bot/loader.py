@@ -46,6 +46,17 @@ except Exception as exc:
 
 try:
     dp = Dispatcher(storage=storage)
+    
+    # Register Middlewares
+    from bot.middlewares.rate_limit import RateLimitMiddleware
+    from bot.middlewares.auth import AuthMiddleware
+    from bot.middlewares.subscription import SubscriptionMiddleware, ForceJoinMiddleware
+    
+    dp.update.middleware(RateLimitMiddleware(calls=20, period=60))
+    dp.update.middleware(AuthMiddleware())
+    dp.update.middleware(SubscriptionMiddleware())
+    dp.update.middleware(ForceJoinMiddleware())
+    
     for router in routers:
         dp.include_router(router)
 except Exception as exc:

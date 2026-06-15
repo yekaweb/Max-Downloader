@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from aiogram import BaseMiddleware
 from aiogram.types import Message, Update, User
-from aioredis import Redis
+from redis.asyncio import Redis
 
 logger = logging.getLogger(__name__)
 

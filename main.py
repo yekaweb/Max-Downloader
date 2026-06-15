@@ -79,7 +79,7 @@ async def main():
         logger.error("   Please add BOT_TOKEN=your_token_here to .env file")
         return
     
-    logger.info(f"✅ Bot token found: {settings.BOT_TOKEN[:15]}...")
+    logger.info(f"✅ Bot token found: {str(settings.BOT_TOKEN)[:15]}...")
     
     # Import bot components (lazy import)
     try:

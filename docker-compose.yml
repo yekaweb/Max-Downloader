@@ -54,9 +54,6 @@ services:
   # ─────────────────────────────────────────────
   celery_worker:
     image: dlbot_image:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: dlbot_celery_worker
     command: celery -A tasks.celery_app worker -l info --concurrency=4 -Q celery
     env_file: .env
@@ -85,9 +82,6 @@ services:
   # ─────────────────────────────────────────────
   flower:
     image: dlbot_image:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: dlbot_flower
     command: celery -A tasks.celery_app flower --port=5555 --basic-auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
     env_file: .env
@@ -135,9 +129,6 @@ services:
   # ─────────────────────────────────────────────
   web_panel:
     image: dlbot_image:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: dlbot_web_panel
     command: uvicorn web.app:app --host 0.0.0.0 --port 8000 --workers 2
     env_file: .env

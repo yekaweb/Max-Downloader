@@ -20,11 +20,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '0.5'
+
 
   # ─────────────────────────────────────────────
   # Redis Cache & Broker
@@ -43,11 +39,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-          cpus: '0.25'
+
 
   # ─────────────────────────────────────────────
   # Celery Worker
@@ -71,11 +63,7 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1g
-          cpus: '2.0'
+
 
   # ─────────────────────────────────────────────
   # Celery Flower (monitoring UI)
@@ -118,11 +106,7 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1g
-          cpus: '1.0'
+
 
   # ─────────────────────────────────────────────
   # FastAPI Admin Panel
@@ -143,11 +127,7 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '0.5'
+
 
 volumes:
   postgres_data:

@@ -53,6 +53,7 @@ services:
   # Celery Worker
   # ─────────────────────────────────────────────
   celery_worker:
+    image: dlbot_image:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -83,6 +84,7 @@ services:
   # Celery Flower (monitoring UI)
   # ─────────────────────────────────────────────
   flower:
+    image: dlbot_image:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -101,6 +103,7 @@ services:
   # Telegram Bot
   # ─────────────────────────────────────────────
   dlbot:
+    image: dlbot_image:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -131,6 +134,7 @@ services:
   # FastAPI Admin Panel
   # ─────────────────────────────────────────────
   web_panel:
+    image: dlbot_image:latest
     build:
       context: .
       dockerfile: Dockerfile

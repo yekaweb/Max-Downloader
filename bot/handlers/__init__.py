@@ -13,6 +13,7 @@ from .payment import router as payment_router
 from .payment_rial import router as payment_rial_router
 from .channels import router as channels_router
 from .menu import router as menu_router
+from .settings_handler import router as settings_router
 from .admin_panel import router as admin_panel_router
 from .download import router as download_flow_router
 from .errors import router as errors_router
@@ -34,6 +35,7 @@ routers = [
     channels_router,
     bonus_coins_router,
     menu_router,
+    settings_router,
     admin_panel_router,        # Standalone admin panel with callbacks
     download_flow_router,      # Real download system — must be before errors_router
     errors_router,             # Must be last as it catches all messages

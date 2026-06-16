@@ -7,8 +7,10 @@ from bot.handlers.profile import show_profile
 from bot.handlers.plans import show_plans
 from bot.handlers.referral import show_referral
 from bot.handlers.history import show_history
+from bot.handlers.history import show_history
 from bot.handlers.help import show_help
 from bot.handlers.admin_panel import admin_panel
+from bot.handlers.settings_handler import show_settings_panel
 
 router = Router()
 
@@ -24,8 +26,6 @@ router.message(F.text == "🛠 پنل مدیریت (Admin)")(admin_panel)
 async def menu_download(message: Message, **kwargs):
     await message.reply("لینک ویدیو یا آهنگ خود را (از یوتیوب، اینستاگرام، تیک‌تاک و...) ارسال کنید تا دانلود شروع شود 📥")
 
-@router.message(F.text == "⚙️ تنظیمات")
-async def menu_settings(message: Message, **kwargs):
-    await message.reply("بخش تنظیمات به زودی اضافه خواهد شد ⚙️")
+router.message(F.text == "⚙️ تنظیمات")(show_settings_panel)
 
 __all__ = ["router"]

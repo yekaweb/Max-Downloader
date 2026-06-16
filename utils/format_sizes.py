@@ -131,7 +131,7 @@ async def get_exact_format_sizes(url: str) -> Dict[str, Dict]:
     
     except Exception as e:
         print(f"Error fetching format sizes: {e}")
-        return {}
+        return {"error": str(e)}
 
 
 def format_size_mb(size_mb: float) -> str:

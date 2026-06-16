@@ -32,58 +32,40 @@ def get_video_quality_keyboard(format_info: Optional[Dict] = None) -> InlineKeyb
     buttons = []
     
     if not format_info:
-        # Fallback to standard buttons if no format info provided
-        buttons.append([InlineKeyboardButton(text="🔵 4K (2160p)", callback_data="quality_4k")])
-        buttons.append([InlineKeyboardButton(text="🟢 1080p", callback_data="quality_1080")])
-        buttons.append([InlineKeyboardButton(text="🟡 720p ✅", callback_data="quality_720")])
-        buttons.append([InlineKeyboardButton(text="🟠 480p", callback_data="quality_480")])
-        buttons.append([InlineKeyboardButton(text="🔴 360p", callback_data="quality_360")])
-        buttons.append([InlineKeyboardButton(text="⚫ 240p", callback_data="quality_240")])
+        # Should not happen now because url_handler checks for error
+        # but just in case, return an empty keyboard with just back button
+        pass
     else:
         # High Quality
         if "4k" in format_info:
             size = format_info["4k"].get("size_mb", 2100)
-            text = f"🔵 4K (2160p) • {size:.1f} MB"
-        else:
-            text = "🔵 4K (2160p) • (غیر دسترس‌پذیر)"
-        buttons.append([InlineKeyboardButton(text=text, callback_data="quality_4k" if "4k" in format_info else "quality_4k_na")])
-        
+            buttons.append([InlineKeyboardButton(text=f"🔵 4K (2160p) • {size:.1f} MB", callback_data="quality_4k")])
+            
+        if "1440p" in format_info:
+            size = format_info["1440p"].get("size_mb", 1200)
+            buttons.append([InlineKeyboardButton(text=f"🟣 1440p • {size:.1f} MB", callback_data="quality_1440")])
+            
         if "1080p" in format_info:
             size = format_info["1080p"].get("size_mb", 850)
-            text = f"🟢 1080p • {size:.1f} MB"
-        else:
-            text = "🟢 1080p • (غیر دسترس‌پذیر)"
-        buttons.append([InlineKeyboardButton(text=text, callback_data="quality_1080" if "1080p" in format_info else "quality_1080_na")])
-        
+            buttons.append([InlineKeyboardButton(text=f"🟢 1080p • {size:.1f} MB", callback_data="quality_1080")])
+            
         # Medium Quality
         if "720p" in format_info:
             size = format_info["720p"].get("size_mb", 420)
-            text = f"🟡 720p • {size:.1f} MB ✅"
-        else:
-            text = "🟡 720p • (غیر دسترس‌پذیر) ✅"
-        buttons.append([InlineKeyboardButton(text=text, callback_data="quality_720" if "720p" in format_info else "quality_720_na")])
-        
+            buttons.append([InlineKeyboardButton(text=f"🟡 720p • {size:.1f} MB ✅", callback_data="quality_720")])
+            
         if "480p" in format_info:
             size = format_info["480p"].get("size_mb", 200)
-            text = f"🟠 480p • {size:.1f} MB"
-        else:
-            text = "🟠 480p • (غیر دسترس‌پذیر)"
-        buttons.append([InlineKeyboardButton(text=text, callback_data="quality_480" if "480p" in format_info else "quality_480_na")])
-        
+            buttons.append([InlineKeyboardButton(text=f"🟠 480p • {size:.1f} MB", callback_data="quality_480")])
+            
         # Low Quality
         if "360p" in format_info:
             size = format_info["360p"].get("size_mb", 95)
-            text = f"🔴 360p • {size:.1f} MB"
-        else:
-            text = "🔴 360p • (غیر دسترس‌پذیر)"
-        buttons.append([InlineKeyboardButton(text=text, callback_data="quality_360" if "360p" in format_info else "quality_360_na")])
-        
+            buttons.append([InlineKeyboardButton(text=f"🔴 360p • {size:.1f} MB", callback_data="quality_360")])
+            
         if "240p" in format_info:
             size = format_info["240p"].get("size_mb", 45)
-            text = f"⚫ 240p • {size:.1f} MB"
-        else:
-            text = "⚫ 240p • (غیر دسترس‌پذیر)"
-        buttons.append([InlineKeyboardButton(text=text, callback_data="quality_240" if "240p" in format_info else "quality_240_na")])
+            buttons.append([InlineKeyboardButton(text=f"⚫ 240p • {size:.1f} MB", callback_data="quality_240")])
     
     # Back button
     buttons.append([InlineKeyboardButton(text="◀️ برگشت", callback_data="back_to_format")])

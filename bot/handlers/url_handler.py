@@ -127,16 +127,28 @@ async def handle_url_submission(message: Message, state: FSMContext):
     
     from utils.format_sizes import get_exact_format_sizes
     format_info = await get_exact_format_sizes(url)
-    session_data["format_info"] = format_info
 
-    await state.set_state(DownloadStates.selecting_format_type)
-    
     # Delete loading message
     try:
         await loading_msg.delete()
     except Exception:
         pass
         
+    if "error" in format_info:
+        await message.reply(
+            f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
+            f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
+            f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
+            parse_mode="HTML",
+        )
+        clear_session(message.from_user.id)
+        await state.clear()
+        return
+
+    session_data["format_info"] = format_info
+
+    await state.set_state(DownloadStates.selecting_format_type)
+    
     await message.answer(
         "🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>\n\n"
         "• 🎬 ویدیو - دانلود با کیفیت انتخابی\n"

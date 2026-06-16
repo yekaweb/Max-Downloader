@@ -149,9 +149,18 @@ async def select_send_as(query: CallbackQuery, state: FSMContext):
     """Handle send-as selection and begin the download execution."""
     await query.answer()
 
+    if query.data == "back_to_subtitle":
+        await query.message.edit_text(
+            "📝 <b>زیرنویس می‌خواهید؟</b>",
+            reply_markup=get_subtitle_keyboard(),
+            parse_mode="HTML",
+        )
+        await state.set_state(DownloadStates.video_selecting_subtitle)
+        return
+
     send_as_map = {
-        "send_video": "video",
-        "send_file": "file",
+        "send_as_video": "video",
+        "send_as_file": "file",
     }
     send_as = send_as_map.get(query.data)
     if not send_as:

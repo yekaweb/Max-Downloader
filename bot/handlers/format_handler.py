@@ -31,6 +31,8 @@ async def select_format_type(query: CallbackQuery, state: FSMContext):
         return
 
     session_data = get_session(query.from_user.id)
+    format_info = session_data.get("format_info", {})
+    codec_sizes = format_info.get("codec_sizes", {}) if format_info else None
 
     if query.data == "format_video":
         session_data["format_type"] = "video"
@@ -39,7 +41,7 @@ async def select_format_type(query: CallbackQuery, state: FSMContext):
             "• H.264 | MP4 ✅ سازگار با همه دستگاه‌ها\n"
             "• AV1 | WebM 🏆 بهترین کیفیت/حجم\n"
             "• VP9 | WebM ⚡ سبک و کارآمد\n",
-            reply_markup=get_video_codec_keyboard(),
+            reply_markup=get_video_codec_keyboard(codec_sizes),
             parse_mode="HTML",
         )
         await state.set_state(DownloadStates.video_codec_selection)
@@ -80,10 +82,13 @@ async def select_video_codec(query: CallbackQuery, state: FSMContext):
 
     session_data = get_session(query.from_user.id)
     session_data["codec"] = codec
+    
+    format_info = session_data.get("format_info", {})
+    video_formats = format_info.get("video_formats", {}) if format_info else None
 
     await query.message.edit_text(
         "📺 <b>کیفیت ویدیو را انتخاب کنید:</b>",
-        reply_markup=get_video_quality_keyboard(),
+        reply_markup=get_video_quality_keyboard(video_formats),
         parse_mode="HTML",
     )
     await state.set_state(DownloadStates.video_quality_selection)
@@ -94,10 +99,14 @@ async def select_video_quality(query: CallbackQuery, state: FSMContext):
     """Handle video quality selection and proceed to subtitle choice."""
     await query.answer()
 
+    session_data = get_session(query.from_user.id)
+    format_info = session_data.get("format_info", {})
+    codec_sizes = format_info.get("codec_sizes", {}) if format_info else None
+
     if query.data == "back_to_codec":
         await query.message.edit_text(
             "🎞️ <b>کدک ویدیو را انتخاب کنید:</b>",
-            reply_markup=get_video_codec_keyboard(),
+            reply_markup=get_video_codec_keyboard(codec_sizes),
             parse_mode="HTML",
         )
         await state.set_state(DownloadStates.video_codec_selection)
@@ -212,10 +221,13 @@ async def back_to_format(query: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "back_to_codec")
 async def back_to_codec(query: CallbackQuery, state: FSMContext):
     await query.answer()
+    session_data = get_session(query.from_user.id)
+    format_info = session_data.get("format_info", {})
+    codec_sizes = format_info.get("codec_sizes", {}) if format_info else None
     await state.set_state(DownloadStates.video_codec_selection)
     await query.message.edit_text(
         "🎞️ <b>کدک ویدیو را انتخاب کنید:</b>",
-        reply_markup=get_video_codec_keyboard(),
+        reply_markup=get_video_codec_keyboard(codec_sizes),
         parse_mode="HTML",
     )
 
@@ -223,10 +235,13 @@ async def back_to_codec(query: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "back_to_quality")
 async def back_to_quality(query: CallbackQuery, state: FSMContext):
     await query.answer()
+    session_data = get_session(query.from_user.id)
+    format_info = session_data.get("format_info", {})
+    video_formats = format_info.get("video_formats", {}) if format_info else None
     await state.set_state(DownloadStates.video_quality_selection)
     await query.message.edit_text(
         "📺 <b>کیفیت ویدیو را انتخاب کنید:</b>",
-        reply_markup=get_video_quality_keyboard(),
+        reply_markup=get_video_quality_keyboard(video_formats),
         parse_mode="HTML",
     )
 

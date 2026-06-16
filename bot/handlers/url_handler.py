@@ -121,8 +121,22 @@ async def handle_url_submission(message: Message, state: FSMContext):
     session_data["codec"] = None
     session_data["subtitle"] = None
     session_data["send_as"] = None
+    
+    # Send loading message
+    loading_msg = await message.answer("🔄 <b>در حال دریافت اطلاعات ویدیو...</b>", parse_mode="HTML")
+    
+    from utils.format_sizes import get_exact_format_sizes
+    format_info = await get_exact_format_sizes(url)
+    session_data["format_info"] = format_info
 
     await state.set_state(DownloadStates.selecting_format_type)
+    
+    # Delete loading message
+    try:
+        await loading_msg.delete()
+    except Exception:
+        pass
+        
     await message.answer(
         "🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>\n\n"
         "• 🎬 ویدیو - دانلود با کیفیت انتخابی\n"

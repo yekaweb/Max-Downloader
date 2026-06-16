@@ -137,7 +137,7 @@ async def apply_stream_upload(
                         message_id=status_msg.message_id,
                         text=text
                     )
-                except:
+                except Exception:
                     pass  # اگر edit نشد، ادامه بده
             
             # آپلود جریانی
@@ -192,7 +192,7 @@ async def apply_stream_upload(
                         message_id=status_msg.message_id,
                         text=text
                     )
-                except:
+                except Exception:
                     pass
             
             # آپلود

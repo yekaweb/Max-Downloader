@@ -206,7 +206,7 @@ async def admin_panel(message: Message):
     
     # Provide link to the FastAPI web panel running on port 8000
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🌐 ورود به پنل مدیریت (Web Panel)", url="http://135.181.198.243:8000/admin")],
+        [InlineKeyboardButton(text="🌐 ورود به پنل مدیریت (Web Panel)", url=settings.admin_panel_url)],
         [InlineKeyboardButton(text="📊 آمار سریع (Stats)", callback_data="admin_stats")],
         [InlineKeyboardButton(text="📢 ارسال پیام همگانی (Broadcast)", callback_data="broadcast_menu")],
     ])

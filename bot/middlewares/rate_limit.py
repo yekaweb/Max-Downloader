@@ -38,7 +38,7 @@ class RateLimitMiddleware(BaseMiddleware):
             # Rate limited
             try:
                 await reply_func("⏱ شما بیش از حد مجاز درخواست داده‌اید. لطفاً کمی صبر کنید.")
-            except:
+            except Exception:
                 pass
             return  # Ignore the update
         

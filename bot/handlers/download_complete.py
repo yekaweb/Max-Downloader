@@ -407,7 +407,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 )
                 try:
                     os.remove(final_filename)
-                except:
+                except Exception:
                     pass
             else:
                 # Send the file using FSInputFile
@@ -435,13 +435,13 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 # Delete progress message
                 try:
                     await progress_msg.delete()
-                except:
+                except Exception:
                     pass
                 
                 # Cleanup temp file
                 try:
                     os.remove(final_filename)
-                except:
+                except Exception:
                     pass
         else:
             await message.answer("❌ فایل دانلود شده پیدا نشد")

@@ -106,7 +106,7 @@ class FileCleanup:
         """Get file size in MB"""
         try:
             return Path(file_path).stat().st_size / 1024 / 1024
-        except:
+        except Exception:
             return 0.0
     
     @staticmethod
@@ -119,7 +119,7 @@ class FileCleanup:
             
             total_size = sum(f.stat().st_size for f in temp_dir.glob("*") if f.is_file())
             return total_size / 1024 / 1024
-        except:
+        except Exception:
             return 0.0
 
 

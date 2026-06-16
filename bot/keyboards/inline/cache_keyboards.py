@@ -63,7 +63,7 @@ class CacheKeyboards:
             if q.resolution and 'x' in q.resolution:
                 try:
                     return int(q.resolution.split('x')[1])
-                except:
+                except Exception:
                     return 0
             return 0
 

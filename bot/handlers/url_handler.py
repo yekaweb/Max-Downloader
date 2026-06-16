@@ -80,9 +80,14 @@ async def handle_platform_twitter(callback: CallbackQuery, state: FSMContext):
     )
 
 
+from config import settings
+
 @router.callback_query(F.data == "back_prev")
 async def handle_back_prev(callback: CallbackQuery):
     await callback.answer()
+    
+    is_admin = callback.from_user.id in settings.ADMIN_IDS_LIST
+    
     await callback.message.edit_text(
         "🤖 <b>سلام به Max Youtube Downloader!</b>\n\n"
         "دانلود‌کننده حرفه‌ای برای:\n"
@@ -92,7 +97,7 @@ async def handle_back_prev(callback: CallbackQuery):
         "• 🎵 TikTok\n\n"
         "برای شروع، یک لینک ارسال کنید یا یکی از گزینه‌ها را انتخاب کنید:",
         parse_mode="HTML",
-        reply_markup=main_menu_kb(),
+        reply_markup=main_menu_kb(is_admin=is_admin),
     )
 
 

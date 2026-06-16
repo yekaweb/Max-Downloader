@@ -33,6 +33,8 @@ async def close_settings(query: CallbackQuery):
     await query.message.delete()
     await query.answer()
 
+from aiogram.exceptions import TelegramBadRequest
+
 @router.callback_query(F.data == "toggle_lang")
 async def toggle_language(query: CallbackQuery):
     async with AsyncSessionLocal() as session:
@@ -48,9 +50,13 @@ async def toggle_language(query: CallbackQuery):
         # در اینجا کیفیت پیش‌فرض را از دیتابیس می‌خوانیم، اما فعلا یک فیلد نداریم.
         # پس فقط زبان را ذخیره می‌کنیم
         
-        await query.message.edit_reply_markup(
-            reply_markup=get_settings_keyboard(language=new_lang)
-        )
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=get_settings_keyboard(language=new_lang)
+            )
+        except TelegramBadRequest:
+            pass
+            
         msg = "✅ زبان به انگلیسی تغییر یافت" if new_lang == "en" else "✅ زبان به فارسی تغییر یافت"
         await query.answer(msg)
 
@@ -80,9 +86,13 @@ async def toggle_quality(query: CallbackQuery):
         user = await user_repo.get_by_telegram_id(query.from_user.id)
         lang = user.language if user else "fa"
         
-    await query.message.edit_reply_markup(
-        reply_markup=get_settings_keyboard(language=lang, default_quality=new_quality)
-    )
+    try:
+        await query.message.edit_reply_markup(
+            reply_markup=get_settings_keyboard(language=lang, default_quality=new_quality)
+        )
+    except TelegramBadRequest:
+        pass
+        
     await query.answer(f"✅ کیفیت پیش‌فرض به {new_quality} تغییر کرد")
 
 async def show_settings_panel(message: Message):

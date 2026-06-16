@@ -16,39 +16,43 @@ from .cached_files import (
 )
 
 
-def main_menu_kb() -> InlineKeyboardMarkup:
+def main_menu_kb(is_admin: bool = False) -> InlineKeyboardMarkup:
     """منوی اصلی"""
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📥 دانلود ویدیو",
-                    callback_data="download_menu"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="👤 پروفایل",
-                    callback_data="profile"
-                ),
-                InlineKeyboardButton(
-                    text="⚙️ تنظیمات",
-                    callback_data="settings"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="📚 راهنما",
-                    callback_data="guide"
-                ),
-                InlineKeyboardButton(
-                    text="❓ درباره",
-                    callback_data="about_menu"
-                )
-            ]
+    kb_list = [
+        [
+            InlineKeyboardButton(
+                text="📥 دانلود ویدیو",
+                callback_data="download_menu"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👤 پروفایل",
+                callback_data="profile"
+            ),
+            InlineKeyboardButton(
+                text="⚙️ تنظیمات",
+                callback_data="settings"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📚 راهنما",
+                callback_data="guide"
+            ),
+            InlineKeyboardButton(
+                text="❓ درباره",
+                callback_data="about_menu"
+            )
         ]
-    )
-    return kb
+    ]
+    
+    if is_admin:
+        kb_list.append([
+            InlineKeyboardButton(text="🛠 پنل مدیریت (Admin)", callback_data="open_admin_panel")
+        ])
+        
+    return InlineKeyboardMarkup(inline_keyboard=kb_list)
 
 
 def download_platform_kb() -> InlineKeyboardMarkup:

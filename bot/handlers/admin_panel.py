@@ -48,6 +48,23 @@ async def admin_panel(message: Message, **kwargs):
         parse_mode="Markdown",
     )
 
+@router.callback_query(F.data == "open_admin_panel")
+async def admin_panel_callback(query: CallbackQuery):
+    """هندلر دکمه مدیریت در منوی شیشه‌ای"""
+    user_id = query.from_user.id
+
+    if user_id not in settings.ADMIN_IDS_LIST:
+        await query.answer("❌ شما دسترسی ادمین ندارید.", show_alert=True)
+        return
+
+    await query.message.edit_text(
+        f"⚙️ **پنل مدیریت – Max Youtube Downloader**\n\n"
+        f"👋 سلام مدیر **{query.from_user.first_name}**!\n\n"
+        f"از منوی زیر یک بخش را انتخاب کنید:",
+        reply_markup=_admin_main_keyboard(),
+        parse_mode="Markdown",
+    )
+
 
 # ─── Callback: آمار ───────────────────────────────────────────────────────────
 

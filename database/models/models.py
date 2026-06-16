@@ -148,6 +148,7 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     plan_id = Column(Integer, ForeignKey("plans.id"), nullable=False)
+    plan = relationship("Plan", backref="subscriptions")
     
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)

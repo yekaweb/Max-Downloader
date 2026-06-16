@@ -40,7 +40,7 @@ router = Router()
 hash_service = HashService()
 
 
-@router.message()
+@router.message(F.text.startswith("http"))
 async def handle_url(message: types.Message, state: FSMContext, session: AsyncSession):
     """
     Handle incoming URL with Pro Cache check.

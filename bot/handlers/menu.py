@@ -8,7 +8,7 @@ from bot.handlers.plans import show_plans
 from bot.handlers.referral import show_referral
 from bot.handlers.history import show_history
 from bot.handlers.help import show_help
-from bot.handlers.download_handler import admin_panel
+from bot.handlers.admin_panel import admin_panel
 
 router = Router()
 

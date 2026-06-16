@@ -1,7 +1,7 @@
 """Admin filter for command access control"""
 from aiogram.filters import Filter
 from aiogram.types import Message
-from config_simple import settings
+from config import settings
 
 
 class IsAdmin(Filter):

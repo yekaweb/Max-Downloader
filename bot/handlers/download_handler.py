@@ -5,7 +5,7 @@ import asyncio
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
-from config_simple import settings
+from config import settings
 from locales import i18n
 from bot.keyboards.inline import (
     main_menu_kb,
@@ -190,9 +190,7 @@ async def admin_stats(callback: CallbackQuery):
 async def admin_panel(message: Message):
     """پنل ادمین"""
     user_id = message.from_user.id
-    admin_ids = [int(x.strip()) for x in settings.ADMIN_IDS.split(",") if x.strip()]
-    
-    if user_id not in admin_ids:
+    if user_id not in settings.ADMIN_IDS_LIST:
         await message.answer("❌ شما مدیر نیستید!")
         return
     

@@ -34,6 +34,7 @@ class AuthMiddleware(BaseMiddleware):
             
             data["user"] = user
             data["db"] = session
+            data["session"] = session  # alias — download.py uses "session" param name
             return await handler(event, data)
 
 

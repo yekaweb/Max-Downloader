@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from pathlib import Path
 import logging
 
-from config_simple import settings
+from config import settings
 from web.auth import get_current_admin
 from web.routers import dashboard, users, broadcast, plans, payments, settings_router
 
@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="DLBot Admin Panel",
-    description="Professional Telegram Downloader Bot - Admin Dashboard",
-    version="1.0.0",
+    title="Max Youtube Downloader - Admin Panel",
+    description="Max Youtube Downloader Bot - Admin Dashboard",
+    version=settings.APP_VERSION,
 )
 
 # Mount static files

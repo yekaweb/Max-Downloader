@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from database.models.cached_download import CachedDownload, CachedQuality
 from database.repositories.cached_download_repo import CachedDownloadRepository
-from config_simple import settings
+from config import settings
 from services.comprehensive_cache_service import CacheService
 import logging
 

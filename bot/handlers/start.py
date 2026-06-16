@@ -41,8 +41,8 @@ async def cmd_start(message: Message, session: AsyncSession = None):
             [KeyboardButton(text="⚙️ تنظیمات")]
         ]
         
-        # Add Admin button if user is admin
-        if str(user_id) in settings.ADMIN_IDS:
+        # Add Admin button if user is admin (exact match using ADMIN_IDS_LIST)
+        if user_id in settings.ADMIN_IDS_LIST:
             kb.append([KeyboardButton(text="🛠 پنل مدیریت (Admin)")])
             
         keyboard = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, input_field_placeholder="لینک خود را بفرستید...")

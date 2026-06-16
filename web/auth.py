@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from config_simple import settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 

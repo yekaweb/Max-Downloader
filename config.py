@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     ZARINPAL_MERCHANT: str = Field("", env="ZARINPAL_MERCHANT")
     NOWPAYMENTS_KEY: str = Field("", env="NOWPAYMENTS_KEY")
 
+    # Security (Web Panel JWT)
+    JWT_SECRET: str = Field("change-me-in-production-secret-key", env="JWT_SECRET")
+    JWT_ALGORITHM: str = Field("HS256", env="JWT_ALGORITHM")
+
+    # Server
+    SERVER_IP: str = Field("localhost", env="SERVER_IP")
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
@@ -149,5 +156,48 @@ class Settings(BaseSettings):
             return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
+    # ── Compatibility aliases (for files migrating from config_simple) ──────────
+    @property
+    def DATABASE_URL(self) -> str:
+        """Alias for database_url — used by Celery tasks"""
+        return self.database_url
+
+    @property
+    def environment(self) -> str:
+        """Alias for APP_ENV — used by web/app.py"""
+        return self.APP_ENV
+
+    @property
+    def jwt_secret(self) -> str:
+        """JWT secret for web panel authentication"""
+        return self.JWT_SECRET
+
+    @property
+    def jwt_algorithm(self) -> str:
+        """JWT algorithm for web panel authentication"""
+        return self.JWT_ALGORITHM
+
+    class _WebPanelConfig:
+        """Nested config object for web panel — compatibility with config_simple"""
+        def __init__(self, host, port, reload):
+            self.host = host
+            self.port = port
+            self.reload = reload
+
+    @property
+    def web_panel(self) -> "_WebPanelConfig":
+        """Nested web panel config — used by web/app.py"""
+        return self._WebPanelConfig(
+            host=self.WEB_HOST,
+            port=self.WEB_PORT,
+            reload=self.DEBUG,
+        )
+
+    @property
+    def admin_panel_url(self) -> str:
+        """Full URL to admin panel — dynamic, uses SERVER_IP env var"""
+        return f"http://{self.SERVER_IP}:{self.WEB_PORT}/admin"
+
 
 settings = Settings()
+

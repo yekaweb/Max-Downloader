@@ -113,66 +113,52 @@
 
 ---
 
-## 🟡 فاز ۲: امنیت و پایداری (اولویت: بالا)
+## ✅ فاز ۲: امنیت و پایداری — **تکمیل شد** ✅
 
-> **زمان تخمینی:** ۱-۲ ساعت  
+> **زمان واقعی:** ~۳۰ دقیقه  
+> **Commit:** `9cd9c76` – Phase 2 complete  
 > **هدف:** رفع حفره‌های امنیتی و جلوگیری از crash ناگهانی  
 > **وابستگی:** فاز ۱ تکمیل شده ✅  
-> **وضعیت کلی فاز:** ⬜ انجام نشده
+> **وضعیت کلی فاز:** ✅ تکمیل شده
 
 ---
 
-### تسک ۲.۱: حذف IP سرور از کد منبع ⬜
+### تسک ۲.۱: حذف IP سرور از کد منبع ✅
 
-**باگ مرتبط:** SEC-01, WEB-02  
-**یادداشت:** IP از `admin_panel.py` حذف شده و به `settings.admin_panel_url` منتقل شد (در فاز ۱ انجام شد). فقط باید تأیید شود `SERVER_IP` در `.env` سرور تنظیم است.
+**باگ مرتبط:** SEC-01, WEB-02
 
-| # | فایل | خط | تغییر | وضعیت |
-|---|------|-----|-------|-------|
-| 1 | تأیید `.env` سرور | — | `SERVER_IP=135.181.198.243` موجود است | ⬜ |
-
----
-
-### تسک ۲.۲: اصلاح bare except در rate_limit.py ⬜
-
-**باگ مرتبط:** SEC-03
-
-```diff
-# در rate_limit.py خط ۴۱:
-- except:
--     pass
-+ except Exception:
-+     pass
-```
-
-| # | اقدام | وضعیت |
-|---|-------|-------|
-| 1 | تغییر `except:` به `except Exception:` | ⬜ |
+| # | فایل | تغییر | وضعیت |
+|---|------|-------|-------|
+| 1 | `.env` | `SERVER_IP` به `212.87.198.89` (IP واقعی سرور) به‌روز شد | ✅ |
+| 2 | `download_handler.py` | IP هاردکد شده → `settings.admin_panel_url` | ✅ |
+| 3 | `admin_panel.py` | از `settings.admin_panel_url` استفاده می‌کند | ✅ |
 
 ---
 
-### تسک ۲.۳: بهبود AuthMiddleware (session lifecycle) ⬜
+### تسک ۲.۲: اصلاح bare except در فایل‌های مختلف ✅
+
+**باگ مرتبط:** SEC-03  
+**فایل‌های اصلاح شده:**
+
+| # | فایل | وضعیت |
+|---|------|-------|
+| 1 | `bot/middlewares/rate_limit.py` | ✅ |
+| 2 | `utils/file_cleanup.py` (2 مورد) | ✅ |
+| 3 | `bot/keyboards/inline/cache_keyboards.py` | ✅ |
+| 4 | `bot/handlers/download_complete.py` (3 مورد) | ✅ |
+| 5 | `bot/handlers/stream_upload.py` (2 مورد) | ✅ |
+
+---
+
+### تسک ۲.۳: بهبود AuthMiddleware (session lifecycle) ✅
 
 **باگ مرتبط:** MW-01  
-**مشکل:** session ممکن است قبل از اتمام callback handler بسته شود.
-
-```diff
-  async def __call__(self, handler, event, data):
--     async with AsyncSessionLocal() as session:
--         data["db"] = session
--         return await handler(event, data)
-+     session = AsyncSessionLocal()
-+     try:
-+         data["db"] = session
-+         data["session"] = session
-+         return await handler(event, data)
-+     finally:
-+         await session.close()
-```
+**تغییر:** بازنویسی با الگوی `try/finally` — session همیشه بسته می‌شود حتی در صورت خطا.
 
 | # | اقدام | وضعیت |
 |---|-------|-------|
-| 1 | بازنویسی lifecycle سِشِن در auth.py | ⬜ |
+| 1 | بازنویسی lifecycle سِشِن در auth.py با try/finally | ✅ |
+| 2 | افزودن logging برای خطاها | ✅ |
 
 ---
 
@@ -319,11 +305,11 @@
 | فاز | عنوان | تعداد تسک | وضعیت |
 |-----|-------|-----------|-------|
 | 🔴 فاز ۱ | رفع باگ‌های بحرانی | ۶ تسک | ✅ تکمیل شد |
-| 🟡 فاز ۲ | امنیت و پایداری | ۳ تسک | ⬜ انجام نشده |
+| 🟡 فاز ۲ | امنیت و پایداری | ۳ تسک | ✅ تکمیل شد |
 | 🟠 فاز ۳ | بهبود رابط کاربری | ۳ تسک | ⬜ انجام نشده |
 | 🔵 فاز ۴ | بهبود دیتابیس | ۳ تسک | ⬜ انجام نشده |
 | 🟢 فاز ۵ | پاکسازی نهایی | ۳ تسک | ⬜ انجام نشده |
-| **مجموع** | | **۱۸ تسک** | **۱/۵ تکمیل** |
+| **مجموع** | | **۱۸ تسک** | **۲/۵ تکمیل** |
 
 ---
 

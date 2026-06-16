@@ -5,9 +5,9 @@ from fastapi.responses import HTMLResponse
 from pathlib import Path
 import logging
 
-from config import settings
+from config import settings as app_settings
 from web.auth import get_current_admin
-from web.routers import dashboard, users, broadcast, plans, payments, settings_router
+from web.routers import dashboard, users, broadcast, plans, payments, settings as web_settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Max Youtube Downloader - Admin Panel",
     description="Max Youtube Downloader Bot - Admin Dashboard",
-    version=settings.APP_VERSION,
+    version=app_settings.APP_VERSION,
 )
 
 # Mount static files
@@ -85,7 +85,7 @@ app.include_router(
 
 # Settings routes
 app.include_router(
-    settings_router.router,
+    web_settings.router,
     prefix="/api/settings",
     tags=["settings"],
     dependencies=[Depends(get_current_admin)],

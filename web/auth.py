@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -65,7 +65,7 @@ def verify_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-async def get_current_admin(credentials: HTTPAuthCredentials = Depends(security)) -> dict:
+async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     """
     Validate JWT token and return admin info.
     Used as a dependency for protected routes.

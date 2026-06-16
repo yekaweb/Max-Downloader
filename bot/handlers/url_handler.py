@@ -84,7 +84,7 @@ async def handle_platform_twitter(callback: CallbackQuery, state: FSMContext):
 async def handle_back_prev(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text(
-        "🤖 <b>سلام به DLBot!</b>\n\n"
+        "🤖 <b>سلام به Max Youtube Downloader!</b>\n\n"
         "دانلود‌کننده حرفه‌ای برای:\n"
         "• 🎥 YouTube\n"
         "• 📸 Instagram\n"

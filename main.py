@@ -1,5 +1,5 @@
 """
-DLBot Main Entry Point
+Max Youtube Downloader Main Entry Point
 Professional Telegram Downloader Bot
 """
 
@@ -69,7 +69,7 @@ logger.add(
 
 async def main():
     """Main async entry point"""
-    logger.info(f"🤖 Starting DLBot v{settings.APP_VERSION}")
+    logger.info(f"🤖 Starting Max Youtube Downloader v{settings.APP_VERSION}")
     logger.info(f"📊 Environment: {settings.APP_ENV}")
     logger.info(f"🌐 Default Language: {settings.DEFAULT_LANGUAGE}")
     
@@ -177,12 +177,12 @@ async def main():
 
 if __name__ == "__main__":
     logger.info("=" * 60)
-    logger.info("DLBot - Professional Telegram Downloader")
+    logger.info("Max Youtube Downloader - Professional Telegram Downloader")
     logger.info("=" * 60)
     
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("\n✅ DLBot shutdown complete")
+        logger.info("\n✅ Max Youtube Downloader shutdown complete")
     except Exception as e:
         logger.critical(f"💥 Critical error: {e}", exc_info=True)

@@ -1,6 +1,7 @@
 """Download execution logic for the modular handler flow."""
 
 import os
+import glob
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,24 @@ try:
     YTDLP_AVAILABLE = True
 except ImportError:
     YTDLP_AVAILABLE = False
+
+# Shared bot-detection bypass options (same as format_sizes.py)
+_BASE_YDL_OPTS = {
+    'socket_timeout': 30,
+    'noplaylist': True,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android', 'web'],
+        }
+    },
+    'http_headers': {
+        'User-Agent': (
+            'Mozilla/5.0 (Linux; Android 11; Pixel 5) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/90.0.4430.91 Mobile Safari/537.36'
+        ),
+    },
+}
 
 
 async def start_download(message: Message, user_id: int, state: FSMContext):
@@ -66,9 +85,11 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             raise RuntimeError("yt-dlp نصب نیست")
 
         ydl_opts = {
+            **_BASE_YDL_OPTS,
             "quiet": True,
             "no_warnings": True,
             "outtmpl": str(output_dir / "%(title)s.%(ext)s"),
+            "merge_output_format": "mp4",
         }
         
         if max_file_size:
@@ -76,26 +97,43 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
 
         if format_type == "video":
             codec = session_data.get("codec")
-            quality_str = session_data.get("quality", "1080")
+            quality_str = session_data.get("quality", "720")
             
+            # FIX Bug #4: added "1440" key
             quality_map = {
                 "4k": 2160,
+                "1440": 1440,
                 "1080": 1080,
                 "720": 720,
                 "480": 480,
                 "360": 360,
-                "240": 240
+                "240": 240,
             }
-            height = quality_map.get(quality_str, 1080)
+            height = quality_map.get(quality_str, 720)
 
+            # FIX Bug #6: all fallbacks are height-constrained
             if codec == "h264":
-                ydl_opts["format"] = f"bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<={height}]/best"
+                ydl_opts["format"] = (
+                    f"bestvideo[height<={height}][vcodec*=avc]+bestaudio[ext=m4a]"
+                    f"/bestvideo[height<={height}][ext=mp4]+bestaudio"
+                    f"/best[height<={height}]"
+                )
             elif codec == "av1":
-                ydl_opts["format"] = f"bestvideo[height<={height}][vcodec^=av01]+bestaudio/best[height<={height}]/best"
+                ydl_opts["format"] = (
+                    f"bestvideo[height<={height}][vcodec^=av01]+bestaudio"
+                    f"/best[height<={height}]"
+                )
             elif codec == "vp9":
-                ydl_opts["format"] = f"bestvideo[height<={height}][vcodec^=vp09]+bestaudio/bestvideo[height<={height}][vcodec^=vp9]+bestaudio/best[height<={height}]/best"
+                ydl_opts["format"] = (
+                    f"bestvideo[height<={height}][vcodec^=vp09]+bestaudio"
+                    f"/bestvideo[height<={height}][vcodec^=vp9]+bestaudio"
+                    f"/best[height<={height}]"
+                )
             else:
-                ydl_opts["format"] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+                ydl_opts["format"] = (
+                    f"bestvideo[height<={height}]+bestaudio"
+                    f"/best[height<={height}]"
+                )
 
         else:
             audio_fmt = session_data.get("audio_format", {"format": "mp3", "bitrate": "128"})
@@ -160,7 +198,15 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         def run_ytdlp():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
-                return ydl.prepare_filename(info)
+                raw_name = ydl.prepare_filename(info)
+                # FIX Bug #5: prepare_filename returns pre-merge extension.
+                # After ffmpeg merges audio+video, the extension changes.
+                # Use glob to find the actual file by base name.
+                base = os.path.splitext(raw_name)[0]
+                matches = [f for f in glob.glob(f"{base}.*") if os.path.isfile(f)]
+                if matches:
+                    return max(matches, key=os.path.getsize)
+                return raw_name  # Fallback to original if no glob match
                 
         max_retries = 3
         retry_delay = 2

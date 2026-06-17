@@ -23,95 +23,88 @@ def get_format_type_keyboard() -> InlineKeyboardMarkup:
 
 def get_video_quality_keyboard(format_info: Optional[Dict] = None) -> InlineKeyboardMarkup:
     """
-    Video Quality Selection with EXACT file sizes
-    
+    Video Quality Selection with EXACT file sizes.
+    Only shows quality buttons for resolutions that actually exist in format_info.
+
     Args:
-        format_info: Dict with actual file sizes from yt-dlp
-                    {"4k": {"size_mb": 2100.5}, "1080p": {"size_mb": 850.3}, ...}
+        format_info: Dict from get_exact_format_sizes()["video_formats"]
+                    {"480p": {"size_mb": 8.9 | None, ...}, ...}
     """
     buttons = []
-    
-    if not format_info:
-        # Should not happen now because url_handler checks for error
-        # but just in case, return an empty keyboard with just back button
-        pass
-    else:
-        # High Quality
-        if "4k" in format_info:
-            size = format_info["4k"].get("size_mb", 2100)
-            buttons.append([InlineKeyboardButton(text=f"🔵 4K (2160p) • {size:.1f} MB", callback_data="quality_4k")])
-            
-        if "1440p" in format_info:
-            size = format_info["1440p"].get("size_mb", 1200)
-            buttons.append([InlineKeyboardButton(text=f"🟣 1440p • {size:.1f} MB", callback_data="quality_1440")])
-            
-        if "1080p" in format_info:
-            size = format_info["1080p"].get("size_mb", 850)
-            buttons.append([InlineKeyboardButton(text=f"🟢 1080p • {size:.1f} MB", callback_data="quality_1080")])
-            
-        # Medium Quality
-        if "720p" in format_info:
-            size = format_info["720p"].get("size_mb", 420)
-            buttons.append([InlineKeyboardButton(text=f"🟡 720p • {size:.1f} MB ✅", callback_data="quality_720")])
-            
-        if "480p" in format_info:
-            size = format_info["480p"].get("size_mb", 200)
-            buttons.append([InlineKeyboardButton(text=f"🟠 480p • {size:.1f} MB", callback_data="quality_480")])
-            
-        # Low Quality
-        if "360p" in format_info:
-            size = format_info["360p"].get("size_mb", 95)
-            buttons.append([InlineKeyboardButton(text=f"🔴 360p • {size:.1f} MB", callback_data="quality_360")])
-            
-        if "240p" in format_info:
-            size = format_info["240p"].get("size_mb", 45)
-            buttons.append([InlineKeyboardButton(text=f"⚫ 240p • {size:.1f} MB", callback_data="quality_240")])
-    
-    # Back button
+
+    if format_info:
+        quality_order = [
+            ("4k",    "🔵 4K (2160p)"),
+            ("1440p", "🟣 1440p"),
+            ("1080p", "🟢 1080p"),
+            ("720p",  "🟡 720p ✅"),
+            ("480p",  "🟠 480p"),
+            ("360p",  "🔴 360p"),
+            ("240p",  "⚫ 240p"),
+        ]
+        # Callback keys do NOT include the trailing 'p' for consistency with quality_map
+        cb_map = {
+            "4k": "quality_4k",
+            "1440p": "quality_1440",
+            "1080p": "quality_1080",
+            "720p":  "quality_720",
+            "480p":  "quality_480",
+            "360p":  "quality_360",
+            "240p":  "quality_240",
+        }
+        for key, label in quality_order:
+            if key not in format_info:
+                continue
+            # FIX Bug #7: size_mb may be None
+            size = format_info[key].get("size_mb")
+            size_str = f"{size:.1f} MB" if size else "حجم: نامشخص"
+            buttons.append([InlineKeyboardButton(
+                text=f"{label} • {size_str}",
+                callback_data=cb_map[key],
+            )])
+
+    # Back button always present
     buttons.append([InlineKeyboardButton(text="◀️ برگشت", callback_data="back_to_format")])
-    
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_video_codec_keyboard(codec_sizes: Optional[Dict] = None) -> InlineKeyboardMarkup:
     """
-    Video Codec Selection with EXACT file sizes
-    
+    Video Codec Selection with EXACT file sizes.
+
     Args:
-        codec_sizes: Dict with file sizes per codec
+        codec_sizes: Dict with file sizes per codec (from format_info["codec_sizes"])
                     {"h264": {"size_mb": 850.3}, "av1": {"size_mb": 520.5}, ...}
     """
     if codec_sizes is None:
         codec_sizes = {}
-    
+
     buttons = []
-    
-    # H.264
+
+    # H.264 — always shown, most compatible
     if "h264" in codec_sizes:
-        size = codec_sizes["h264"].get("size_mb", 850)
-        text = f"H.264 | MP4 ✅ سازگار • {size:.1f} MB"
+        size = codec_sizes["h264"].get("size_mb")
+        size_str = f"{size:.1f} MB" if size else "حجم: نامشخص"
+        text = f"H.264 | MP4 ✅ سازگار • {size_str}"
     else:
-        text = "H.264 | MP4 ✅ سازگار • (محاسبه‌شود)"
+        text = "H.264 | MP4 ✅ سازگار"
     buttons.append([InlineKeyboardButton(text=text, callback_data="codec_h264")])
-    
-    # AV1
+
+    # AV1 — only if available
     if "av1" in codec_sizes:
-        size = codec_sizes["av1"].get("size_mb", 520)
-        text = f"AV1 | WebM 🏆 کیفیت • {size:.1f} MB"
-    else:
-        text = "AV1 | WebM 🏆 کیفیت • (غیر موجود)"
-    buttons.append([InlineKeyboardButton(text=text, callback_data="codec_av1" if "av1" in codec_sizes else "codec_av1_na")])
-    
-    # VP9
+        size = codec_sizes["av1"].get("size_mb")
+        size_str = f"{size:.1f} MB" if size else "حجم: نامشخص"
+        buttons.append([InlineKeyboardButton(text=f"AV1 | WebM 🏆 کیفیت • {size_str}", callback_data="codec_av1")])
+
+    # VP9 — only if available
     if "vp9" in codec_sizes:
-        size = codec_sizes["vp9"].get("size_mb", 610)
-        text = f"VP9 | WebM ⚡ سبک • {size:.1f} MB"
-    else:
-        text = "VP9 | WebM ⚡ سبک • (غیر موجود)"
-    buttons.append([InlineKeyboardButton(text=text, callback_data="codec_vp9" if "vp9" in codec_sizes else "codec_vp9_na")])
-    
-    buttons.append([InlineKeyboardButton(text="◀️ برگشت", callback_data="back_to_quality")])
-    
+        size = codec_sizes["vp9"].get("size_mb")
+        size_str = f"{size:.1f} MB" if size else "حجم: نامشخص"
+        buttons.append([InlineKeyboardButton(text=f"VP9 | WebM ⚡ سبک • {size_str}", callback_data="codec_vp9")])
+
+    # FIX Bug #3.2: back button goes to format-type selection, NOT quality
+    buttons.append([InlineKeyboardButton(text="◀️ برگشت", callback_data="back_to_format")])
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

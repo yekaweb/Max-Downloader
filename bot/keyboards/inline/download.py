@@ -128,15 +128,43 @@ def get_subtitle_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def get_send_as_keyboard() -> InlineKeyboardMarkup:
+def get_send_as_keyboard(has_dubbed: bool = False) -> InlineKeyboardMarkup:
     """Send As Selection: Video or Document"""
+    # Back button goes to language selection if dubbed tracks exist, else subtitle
+    back_cb = "back_to_language" if has_dubbed else "back_to_subtitle"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📹 ویدیو (قابل پخش)", callback_data="send_as_video")],
             [InlineKeyboardButton(text="📁 فایل (دانلود کامل)", callback_data="send_as_file")],
-            [InlineKeyboardButton(text="◀️ برگشت", callback_data="back_to_subtitle")],
+            [InlineKeyboardButton(text="◀️ برگشت", callback_data=back_cb)],
         ]
     )
+
+
+def get_dubbed_language_keyboard(dubbed_tracks: dict) -> InlineKeyboardMarkup:
+    """
+    Phase 5.2 — Dubbed / Multi-language Audio Track Selection.
+
+    Args:
+        dubbed_tracks: from format_info['dubbed_tracks']
+            {'en': {'name': 'English 🇺🇸', 'format_id': '...'}, 'fa': {...}, ...}
+    """
+    buttons = []
+    for lang_code, info in dubbed_tracks.items():
+        name = info.get('name', lang_code.upper())
+        size = info.get('size_mb')
+        size_str = f" • {size:.1f} MB" if size else ""
+        buttons.append([InlineKeyboardButton(
+            text=f"🔊 {name}{size_str}",
+            callback_data=f"lang_{lang_code}",
+        )])
+    # Option to skip and use original audio
+    buttons.append([InlineKeyboardButton(
+        text="🎵 صدای اصلی ویدیو (پیش‌فرض)",
+        callback_data="lang_original",
+    )])
+    buttons.append([InlineKeyboardButton(text="◀️ برگشت", callback_data="back_to_subtitle")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_audio_format_keyboard() -> InlineKeyboardMarkup:
@@ -174,6 +202,6 @@ def get_quality_keyboard() -> InlineKeyboardMarkup:
 
 
 __all__ = ["get_format_type_keyboard", "get_video_quality_keyboard", 
-           "get_video_codec_keyboard", "get_subtitle_keyboard", 
-           "get_send_as_keyboard", "get_audio_format_keyboard", 
-           "get_quality_keyboard"]
+           "get_video_codec_keyboard", "get_subtitle_keyboard",
+           "get_send_as_keyboard", "get_dubbed_language_keyboard",
+           "get_audio_format_keyboard", "get_quality_keyboard"]

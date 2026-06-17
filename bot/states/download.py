@@ -35,8 +35,11 @@ class DownloadStates(StatesGroup):
     
     # STEP 5: VIDEO PATH - Subtitle Selection (Optional)
     video_selecting_subtitle = State()
-    
-    # STEP 6: VIDEO PATH - Send As Selection
+
+    # STEP 6: VIDEO PATH - Language/Dubbed Audio Selection (Optional, auto-skipped if single language)
+    video_selecting_language = State()
+
+    # STEP 7: VIDEO PATH - Send As Selection
     video_selecting_send_as = State()
     
     # STEP 3: AUDIO PATH - Format Selection

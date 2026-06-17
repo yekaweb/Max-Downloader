@@ -2,33 +2,49 @@
 import asyncio
 from typing import Dict, Optional
 
+import os
+
 try:
     import yt_dlp
 except ImportError:
     yt_dlp = None
 
-# Shared ydl_opts for metadata extraction (bot-detection bypass)
-_EXTRACT_YDL_OPTS = {
-    'quiet': True,
-    'no_warnings': True,
-    'skip_download': True,
-    'extract_flat': False,
-    'noplaylist': True,
-    'socket_timeout': 30,
-    # Use Android client to bypass datacenter IP bot-detection
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android', 'web'],
-        }
-    },
-    'http_headers': {
-        'User-Agent': (
-            'Mozilla/5.0 (Linux; Android 11; Pixel 5) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/90.0.4430.91 Mobile Safari/537.36'
-        ),
-    },
-}
+# Path to optional cookies file (place cookies.txt in project root on the server)
+# Export from Chrome/Firefox using "Get cookies.txt LOCALLY" extension
+COOKIES_FILE = "/app/cookies.txt"
+
+def _build_ydl_opts(extra: dict = None) -> dict:
+    """Build yt-dlp options with bot-detection bypass and optional cookies."""
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'noplaylist': True,
+        'socket_timeout': 30,
+        # Android client bypasses datacenter IP bot-detection
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+            }
+        },
+        'http_headers': {
+            'User-Agent': (
+                'Mozilla/5.0 (Linux; Android 11; Pixel 5) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/90.0.4430.91 Mobile Safari/537.36'
+            ),
+        },
+    }
+    # Phase 4.3: inject cookies if the file exists on the server
+    if os.path.isfile(COOKIES_FILE):
+        opts['cookiefile'] = COOKIES_FILE
+
+    if extra:
+        opts.update(extra)
+    return opts
+
+# Pre-built opts for metadata extraction only (no download)
+_EXTRACT_YDL_OPTS = _build_ydl_opts({'skip_download': True, 'extract_flat': False})
+
 
 
 async def get_exact_format_sizes(url: str) -> Dict:
@@ -156,7 +172,18 @@ async def get_exact_format_sizes(url: str) -> Dict:
             if vcodec not in result['codec_sizes'] and size_mb:
                 result['codec_sizes'][vcodec] = {'size_mb': size_mb}
 
-        # ── Process AUDIO-ONLY formats ────────────────────────────────────────
+        # ── Process AUDIO-ONLY formats + Language/Dubbed tracks ──────────────
+        # Language name map for common language codes
+        _LANG_NAMES = {
+            'en': 'English 🇺🇸', 'fa': 'فارسی 🇮🇷', 'ar': 'العربية 🇸🇦',
+            'es': 'Español 🇪🇸', 'fr': 'Français 🇫🇷', 'de': 'Deutsch 🇩🇪',
+            'ru': 'Русский 🇷🇺', 'zh': '中文 🇨🇳', 'ja': '日本語 🇯🇵',
+            'ko': '한국어 🇰🇷', 'pt': 'Português 🇧🇷', 'tr': 'Türkçe 🇹🇷',
+            'hi': 'हिन्दी 🇮🇳', 'it': 'Italiano 🇮🇹',
+        }
+
+        dubbed_tracks = {}  # {lang_code: {name, format_id, size_mb}}
+
         for fmt in formats:
             acodec = fmt.get('acodec')
             if not acodec or acodec == 'none':
@@ -165,6 +192,18 @@ async def get_exact_format_sizes(url: str) -> Dict:
                 continue  # Skip muxed streams
 
             filesize = fmt.get('filesize') or fmt.get('filesize_approx') or 0
+            lang = fmt.get('language') or ''
+            lang_code = lang.split('-')[0].lower() if lang else ''  # 'en-US' → 'en'
+
+            # Phase 5.1: collect dubbed/alternative audio tracks by language
+            if lang_code and lang_code not in dubbed_tracks:
+                size_mb = round(filesize / (1024 * 1024), 1) if filesize else None
+                dubbed_tracks[lang_code] = {
+                    'name': _LANG_NAMES.get(lang_code, lang_code.upper()),
+                    'format_id': fmt.get('format_id'),
+                    'size_mb': size_mb,
+                }
+
             if not filesize:
                 continue
 
@@ -180,7 +219,12 @@ async def get_exact_format_sizes(url: str) -> Dict:
                 'format_id': fmt.get('format_id'),
             }
 
+        # Only include dubbed_tracks if more than one language track exists
+        if len(dubbed_tracks) > 1:
+            result['dubbed_tracks'] = dubbed_tracks
+
         return result
+
 
     except Exception as e:
         return {"error": str(e)}

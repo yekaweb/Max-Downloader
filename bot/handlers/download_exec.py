@@ -98,7 +98,8 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         if format_type == "video":
             codec = session_data.get("codec")
             quality_str = session_data.get("quality", "720")
-            
+            audio_lang = session_data.get("audio_lang")  # Phase 5.5: None = default
+
             # FIX Bug #4: added "1440" key
             quality_map = {
                 "4k": 2160,
@@ -111,29 +112,36 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             }
             height = quality_map.get(quality_str, 720)
 
+            # Phase 5.5: build audio selector with optional language constraint
+            if audio_lang:
+                audio_sel = f"bestaudio[language={audio_lang}]/bestaudio"
+            else:
+                audio_sel = "bestaudio"
+
             # FIX Bug #6: all fallbacks are height-constrained
             if codec == "h264":
                 ydl_opts["format"] = (
-                    f"bestvideo[height<={height}][vcodec*=avc]+bestaudio[ext=m4a]"
-                    f"/bestvideo[height<={height}][ext=mp4]+bestaudio"
+                    f"bestvideo[height<={height}][vcodec*=avc]+{audio_sel}[ext=m4a]"
+                    f"/bestvideo[height<={height}][ext=mp4]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
             elif codec == "av1":
                 ydl_opts["format"] = (
-                    f"bestvideo[height<={height}][vcodec^=av01]+bestaudio"
+                    f"bestvideo[height<={height}][vcodec^=av01]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
             elif codec == "vp9":
                 ydl_opts["format"] = (
-                    f"bestvideo[height<={height}][vcodec^=vp09]+bestaudio"
-                    f"/bestvideo[height<={height}][vcodec^=vp9]+bestaudio"
+                    f"bestvideo[height<={height}][vcodec^=vp09]+{audio_sel}"
+                    f"/bestvideo[height<={height}][vcodec^=vp9]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
             else:
                 ydl_opts["format"] = (
-                    f"bestvideo[height<={height}]+bestaudio"
+                    f"bestvideo[height<={height}]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
+
 
         else:
             audio_fmt = session_data.get("audio_format", {"format": "mp3", "bitrate": "128"})

@@ -12,6 +12,7 @@ from bot.keyboards.inline.download import (
     get_video_codec_keyboard,
     get_subtitle_keyboard,
     get_send_as_keyboard,
+    get_dubbed_language_keyboard,
     get_audio_format_keyboard,
 )
 from bot.handlers.download_exec import start_download
@@ -145,12 +146,28 @@ async def select_subtitle(query: CallbackQuery, state: FSMContext):
     session_data = get_session(query.from_user.id)
     session_data["subtitle"] = query.data.replace("sub_", "")
 
-    await query.message.edit_text(
-        "📤 <b>نحوه دریافت فایل را انتخاب کنید:</b>",
-        reply_markup=get_send_as_keyboard(),
-        parse_mode="HTML",
-    )
-    await state.set_state(DownloadStates.video_selecting_send_as)
+    # Phase 5.4 & 5.6: check for dubbed audio tracks
+    format_info = session_data.get("format_info", {})
+    dubbed_tracks = format_info.get("dubbed_tracks", {}) if format_info else {}
+
+    if len(dubbed_tracks) > 1:
+        # Show language selection step
+        await query.message.edit_text(
+            "🌐 <b>زبان صدای ویدیو را انتخاب کنید:</b>\n\n"
+            "این ویدیو دارای چند زبان صوتی است:",
+            reply_markup=get_dubbed_language_keyboard(dubbed_tracks),
+            parse_mode="HTML",
+        )
+        await state.set_state(DownloadStates.video_selecting_language)
+    else:
+        # Phase 5.6: single language — auto-skip to send_as
+        session_data["audio_lang"] = None
+        await query.message.edit_text(
+            "📤 <b>نحوه دریافت فایل را انتخاب کنید:</b>",
+            reply_markup=get_send_as_keyboard(has_dubbed=False),
+            parse_mode="HTML",
+        )
+        await state.set_state(DownloadStates.video_selecting_send_as)
 
 
 @router.callback_query(DownloadStates.video_selecting_send_as)
@@ -159,12 +176,27 @@ async def select_send_as(query: CallbackQuery, state: FSMContext):
     await query.answer()
 
     if query.data == "back_to_subtitle":
+        session_data = get_session(query.from_user.id)
+        format_info = session_data.get("format_info", {})
+        codec_sizes = format_info.get("codec_sizes", {}) if format_info else None
         await query.message.edit_text(
             "📝 <b>زیرنویس می‌خواهید؟</b>",
             reply_markup=get_subtitle_keyboard(),
             parse_mode="HTML",
         )
         await state.set_state(DownloadStates.video_selecting_subtitle)
+        return
+
+    if query.data == "back_to_language":
+        session_data = get_session(query.from_user.id)
+        format_info = session_data.get("format_info", {})
+        dubbed_tracks = format_info.get("dubbed_tracks", {}) if format_info else {}
+        await query.message.edit_text(
+            "🌐 <b>زبان صدای ویدیو را انتخاب کنید:</b>",
+            reply_markup=get_dubbed_language_keyboard(dubbed_tracks),
+            parse_mode="HTML",
+        )
+        await state.set_state(DownloadStates.video_selecting_language)
         return
 
     send_as_map = {
@@ -255,3 +287,43 @@ async def back_to_subtitle(query: CallbackQuery, state: FSMContext):
         reply_markup=get_subtitle_keyboard(),
         parse_mode="HTML",
     )
+
+
+@router.callback_query(DownloadStates.video_selecting_language)
+async def select_dubbed_language(query: CallbackQuery, state: FSMContext):
+    """
+    Phase 5.4 — Handle dubbed audio language selection.
+    Saves selected lang and advances to send_as step.
+    Auto-skip is already handled in select_subtitle.
+    """
+    await query.answer()
+
+    if query.data == "back_to_subtitle":
+        await query.message.edit_text(
+            "📝 <b>زیرنویس می‌خواهید؟</b>",
+            reply_markup=get_subtitle_keyboard(),
+            parse_mode="HTML",
+        )
+        await state.set_state(DownloadStates.video_selecting_subtitle)
+        return
+
+    session_data = get_session(query.from_user.id)
+    format_info = session_data.get("format_info", {})
+    dubbed_tracks = format_info.get("dubbed_tracks", {}) if format_info else {}
+
+    if query.data == "lang_original":
+        session_data["audio_lang"] = None  # Use default audio track
+    elif query.data.startswith("lang_"):
+        lang_code = query.data.replace("lang_", "")
+        session_data["audio_lang"] = lang_code
+    else:
+        await query.answer("❌ انتخاب نامعتبر", show_alert=True)
+        return
+
+    await query.message.edit_text(
+        "📤 <b>نحوه دریافت فایل را انتخاب کنید:</b>",
+        reply_markup=get_send_as_keyboard(has_dubbed=True),
+        parse_mode="HTML",
+    )
+    await state.set_state(DownloadStates.video_selecting_send_as)
+

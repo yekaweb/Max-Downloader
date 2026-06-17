@@ -68,3 +68,6 @@ npm-debug.log
 # Docker
 *.cache
 docker-compose.override.yml
+
+# yt-dlp cookies (contains sensitive session tokens — NEVER commit)
+cookies.txt

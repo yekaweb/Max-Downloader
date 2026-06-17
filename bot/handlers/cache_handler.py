@@ -70,7 +70,10 @@ async def send_cached(query: CallbackQuery, state: FSMContext, db_session: Async
 @router.callback_query(F.data == "fresh_download_search")
 async def fresh_download_search(query: CallbackQuery, state: FSMContext):
     """Switch from cache flow to fresh download flow."""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     await query.message.answer(
         "🔄 در حال آماده‌سازی دانلود تازه. لطفاً لینک جدید یا همان لینک موجود را ارسال کنید."
     )

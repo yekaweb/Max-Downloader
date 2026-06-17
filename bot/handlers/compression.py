@@ -30,7 +30,10 @@ router = Router()
 @router.callback_query(F.data == "compression_option")
 async def show_compression_menu(query: types.CallbackQuery):
     """نمایش منوی فشرده‌سازی"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -85,7 +88,10 @@ async def show_compression_menu(query: types.CallbackQuery):
 @router.callback_query(F.data == "compress_video_option")
 async def show_video_quality_menu(query: types.CallbackQuery):
     """نمایش منوی کیفیت ویدیو"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -120,7 +126,10 @@ async def show_video_quality_menu(query: types.CallbackQuery):
 @router.callback_query(F.data.startswith("video_quality_"))
 async def select_video_quality(query: types.CallbackQuery, state: FSMContext):
     """انتخاب کیفیت ویدیو"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     quality_map = {
         'ultra_low': VideoQuality.ULTRA_LOW,
@@ -150,7 +159,10 @@ async def select_video_quality(query: types.CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "compress_audio_option")
 async def show_audio_quality_menu(query: types.CallbackQuery):
     """نمایش منوی کیفیت صوت"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -185,7 +197,10 @@ async def show_audio_quality_menu(query: types.CallbackQuery):
 @router.callback_query(F.data.startswith("audio_quality_"))
 async def select_audio_quality(query: types.CallbackQuery, state: FSMContext):
     """انتخاب کیفیت صوت"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     quality_map = {
         'ultra_low': AudioQuality.ULTRA_LOW,
@@ -215,7 +230,10 @@ async def select_audio_quality(query: types.CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "compress_platform_option")
 async def show_platform_menu(query: types.CallbackQuery):
     """نمایش منوی پلتفرم‌ها"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -250,7 +268,10 @@ async def show_platform_menu(query: types.CallbackQuery):
 @router.callback_query(F.data.startswith("platform_"))
 async def select_platform(query: types.CallbackQuery, state: FSMContext):
     """انتخاب پلتفرم"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     platform = query.data.replace("platform_", "")
     platform_names = {
@@ -279,7 +300,10 @@ async def select_platform(query: types.CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "compress_auto_option")
 async def enable_auto_compression(query: types.CallbackQuery, state: FSMContext):
     """فعال‌کردن فشرده‌سازی خودکار"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -305,7 +329,10 @@ async def enable_auto_compression(query: types.CallbackQuery, state: FSMContext)
 @router.callback_query(F.data == "auto_compress_enable")
 async def enable_auto_compress_confirm(query: types.CallbackQuery, state: FSMContext):
     """تایید فشرده‌سازی خودکار"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     await state.update_data(use_auto_compression=True)
     
@@ -442,7 +469,10 @@ async def apply_compression(
 @router.callback_query(F.data == "check_compression_status")
 async def check_compression_status(query: types.CallbackQuery):
     """بررسی وضعیت فشرده‌سازی‌های فعال"""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     try:
         compression = await get_compression_service()

@@ -136,7 +136,10 @@ async def handle_force_join(
                     parse_mode="HTML"
                 )
                 
-                await query.answer()
+                try:
+                    await query.answer()
+                except Exception:
+                    pass
                 
             except Exception as e:
                 logger.error(f"Error creating invite link: {e}")

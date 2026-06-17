@@ -321,7 +321,10 @@ async def handle_rial_plan_selection(
             parse_mode="HTML"
         )
         
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception:
+            pass
     except Exception as e:
         logger.error(f"Error: {e}")
         await query.answer("خطا رخ داد", show_alert=True)
@@ -346,7 +349,10 @@ async def handle_rial_months_selection(
             months=months
         )
         
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception:
+            pass
     except Exception as e:
         logger.error(f"Error: {e}")
         await query.answer("خطا رخ داد", show_alert=True)

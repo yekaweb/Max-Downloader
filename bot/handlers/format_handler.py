@@ -23,7 +23,10 @@ router = Router()
 @router.callback_query(DownloadStates.selecting_format_type)
 async def select_format_type(query: CallbackQuery, state: FSMContext):
     """Handle the user selection between video and audio."""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     if query.data == "cancel_download":
         await query.message.delete()
@@ -60,7 +63,10 @@ async def select_format_type(query: CallbackQuery, state: FSMContext):
 @router.callback_query(DownloadStates.video_codec_selection)
 async def select_video_codec(query: CallbackQuery, state: FSMContext):
     """Handle video codec selection and show quality options."""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     if query.data == "back_to_format":
         await query.message.edit_text(
@@ -98,7 +104,10 @@ async def select_video_codec(query: CallbackQuery, state: FSMContext):
 @router.callback_query(DownloadStates.video_quality_selection)
 async def select_video_quality(query: CallbackQuery, state: FSMContext):
     """Handle video quality selection and proceed to subtitle choice."""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     session_data = get_session(query.from_user.id)
     format_info = session_data.get("format_info", {})
@@ -132,7 +141,10 @@ async def select_video_quality(query: CallbackQuery, state: FSMContext):
 @router.callback_query(DownloadStates.video_selecting_subtitle)
 async def select_subtitle(query: CallbackQuery, state: FSMContext):
     """Handle subtitle selection and advance to send-as choice."""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     if query.data == "back_to_codec":
         await query.message.edit_text(
@@ -173,7 +185,10 @@ async def select_subtitle(query: CallbackQuery, state: FSMContext):
 @router.callback_query(DownloadStates.video_selecting_send_as)
 async def select_send_as(query: CallbackQuery, state: FSMContext):
     """Handle send-as selection and begin the download execution."""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     if query.data == "back_to_subtitle":
         session_data = get_session(query.from_user.id)
@@ -217,7 +232,10 @@ async def select_send_as(query: CallbackQuery, state: FSMContext):
 @router.callback_query(DownloadStates.audio_format_selection)
 async def select_audio_format(query: CallbackQuery, state: FSMContext):
     """Handle audio format selection and start audio download."""
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     audio_map = {
         "audio_mp3_320": {"format": "mp3", "bitrate": "320"},
@@ -241,7 +259,10 @@ async def select_audio_format(query: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "back_to_format")
 async def back_to_format(query: CallbackQuery, state: FSMContext):
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     await state.set_state(DownloadStates.selecting_format_type)
     await query.message.edit_text(
         "🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>",
@@ -252,7 +273,10 @@ async def back_to_format(query: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "back_to_codec")
 async def back_to_codec(query: CallbackQuery, state: FSMContext):
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     session_data = get_session(query.from_user.id)
     format_info = session_data.get("format_info", {})
     codec_sizes = format_info.get("codec_sizes", {}) if format_info else None
@@ -266,7 +290,10 @@ async def back_to_codec(query: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "back_to_quality")
 async def back_to_quality(query: CallbackQuery, state: FSMContext):
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     session_data = get_session(query.from_user.id)
     format_info = session_data.get("format_info", {})
     video_formats = format_info.get("video_formats", {}) if format_info else None
@@ -280,7 +307,10 @@ async def back_to_quality(query: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "back_to_subtitle")
 async def back_to_subtitle(query: CallbackQuery, state: FSMContext):
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     await state.set_state(DownloadStates.video_selecting_subtitle)
     await query.message.edit_text(
         "📝 <b>زیرنویس می‌خواهید؟</b>",
@@ -296,7 +326,10 @@ async def select_dubbed_language(query: CallbackQuery, state: FSMContext):
     Saves selected lang and advances to send_as step.
     Auto-skip is already handled in select_subtitle.
     """
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     if query.data == "back_to_subtitle":
         await query.message.edit_text(

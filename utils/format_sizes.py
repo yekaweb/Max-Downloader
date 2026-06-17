@@ -14,28 +14,39 @@ except ImportError:
 COOKIES_FILE = "/app/cookies.txt"
 
 def _build_ydl_opts(extra: dict = None) -> dict:
-    """Build yt-dlp options with bot-detection bypass and optional cookies."""
+    """Build yt-dlp options with bot-detection bypass and optional cookies/OAuth2."""
+    
+    # 1. Professional Anti-Bot System: Persistent Cache
+    cache_dir = '/app/cached_files/yt_dlp_cache'
+    
     opts = {
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
         'socket_timeout': 30,
-        # Android client bypasses datacenter IP bot-detection
+        'cachedir': cache_dir,
+        # Rotate clients to mimic real users and bypass blocks
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web'],
+                'player_client': ['web', 'android', 'ios'],
             }
         },
         'http_headers': {
             'User-Agent': (
-                'Mozilla/5.0 (Linux; Android 11; Pixel 5) '
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                 'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/90.0.4430.91 Mobile Safari/537.36'
+                'Chrome/120.0.0.0 Safari/537.36'
             ),
         },
     }
-    # Phase 4.3: inject cookies if the file exists on the server
-    if os.path.isfile(COOKIES_FILE):
+
+    # 2. Advanced Bypass: Prefer native OAuth2 token if generated
+    oauth_token_path = os.path.join(cache_dir, 'youtube_oauth2_tokens.json')
+    if os.path.isfile(oauth_token_path):
+        opts['username'] = 'oauth2'
+        opts['password'] = ''
+    # 3. Fallback: Use cookies.txt if provided
+    elif os.path.isfile(COOKIES_FILE):
         opts['cookiefile'] = COOKIES_FILE
 
     if extra:

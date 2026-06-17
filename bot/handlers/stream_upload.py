@@ -27,7 +27,10 @@ async def show_stream_upload_menu(query: types.CallbackQuery, state: FSMContext)
     """
     نمایش منوی آپلود جریانی
     """
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -61,7 +64,10 @@ async def enable_stream_upload(query: types.CallbackQuery, state: FSMContext):
     """
     فعال‌کردن آپلود جریانی برای دانلود‌های آینده
     """
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     # ذخیره در state
     await state.update_data(use_stream_upload=True)
@@ -233,7 +239,10 @@ async def check_stream_status(query: types.CallbackQuery):
     """
     بررسی وضعیت stream upload و بفر
     """
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     try:
         hybrid_service = await get_hybrid_service()

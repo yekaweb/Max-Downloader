@@ -26,12 +26,18 @@ def get_settings_keyboard(language="fa", default_quality="720p"):
 
 @router.callback_query(F.data == "ignore")
 async def ignore_callback(query: CallbackQuery):
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 @router.callback_query(F.data == "close_settings")
 async def close_settings(query: CallbackQuery):
     await query.message.delete()
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 from aiogram.exceptions import TelegramBadRequest
 

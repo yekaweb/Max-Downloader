@@ -247,7 +247,10 @@ async def show_cached_qualities(
         await state.set_state(DownloadStates.selecting_cached_file)
 
         await query.message.edit_text(caption, reply_markup=kb, parse_mode="Markdown")
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception:
+            pass
 
     except Exception as e:
         logger.exception(f"[PRO CACHE] Error showing qualities: {e}")
@@ -440,7 +443,10 @@ async def back_to_cache_options(query: CallbackQuery, state: FSMContext):
             reply_markup=kb,
             parse_mode="Markdown"
         )
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception:
+            pass
     except Exception as e:
         logger.exception(f"[PRO CACHE] Error going back: {e}")
         await query.answer("❌ خطا", show_alert=True)
@@ -460,7 +466,10 @@ async def back_to_main_callback(query: CallbackQuery, state: FSMContext):
         "🔙 به منوی اصلی بازگشتید.\n\n"
         "💡 برای دانلود محتوای جدید، لینک مورد نظر را ارسال کنید."
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "fresh_search")
@@ -475,7 +484,10 @@ async def fresh_search_callback(query: CallbackQuery, state: FSMContext):
         reply_markup=get_format_type_keyboard(),
         parse_mode="Markdown"
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ═══════════════════════════════════════════════════════════════════════

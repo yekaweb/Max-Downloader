@@ -100,7 +100,10 @@ async def cb_stats(query: CallbackQuery, **kwargs):
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="adm_back_main")]
     ])
     await query.message.edit_text(text, reply_markup=back_kb, parse_mode="Markdown")
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ─── Callback: مدیریت ادمین‌ها ───────────────────────────────────────────────
@@ -125,7 +128,10 @@ async def cb_manage_admins(query: CallbackQuery, **kwargs):
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="adm_back_main")]
     ])
     await query.message.edit_text(text, reply_markup=back_kb, parse_mode="Markdown")
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ─── Callback: زرین‌پال ───────────────────────────────────────────────────────
@@ -153,7 +159,10 @@ async def cb_zarinpal(query: CallbackQuery, **kwargs):
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="adm_back_main")]
     ])
     await query.message.edit_text(text, reply_markup=back_kb, parse_mode="Markdown")
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ─── Callback: درگاه ارز دیجیتال ─────────────────────────────────────────────
@@ -179,7 +188,10 @@ async def cb_crypto(query: CallbackQuery, **kwargs):
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="adm_back_main")]
     ])
     await query.message.edit_text(text, reply_markup=back_kb, parse_mode="Markdown")
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ─── Callback: پلاگین‌ها ──────────────────────────────────────────────────────
@@ -205,7 +217,10 @@ async def cb_plugins(query: CallbackQuery, **kwargs):
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="adm_back_main")],
     ])
     await query.message.edit_text(text, reply_markup=back_kb, parse_mode="Markdown")
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ─── Callback: بازگشت به منوی اصلی ادمین ────────────────────────────────────
@@ -223,7 +238,10 @@ async def cb_back_main(query: CallbackQuery, **kwargs):
         reply_markup=_admin_main_keyboard(),
         parse_mode="Markdown",
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ─── Callback: Broadcast ─────────────────────────────────────────────────────
@@ -234,7 +252,10 @@ async def cb_broadcast(query: CallbackQuery, **kwargs):
     if query.from_user.id not in settings.ADMIN_IDS_LIST:
         await query.answer("❌ دسترسی رد شد", show_alert=True)
         return
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     await query.message.answer(
         "📢 برای ارسال پیام همگانی، از دستور /broadcast استفاده کنید."
     )

@@ -125,7 +125,10 @@ async def select_video_format(query: CallbackQuery, state: FSMContext):
         "• ⚫ 240p • ~45MB",
         reply_markup=get_video_quality_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 @router.callback_query(DownloadStates.selecting_format_type, F.data == "format_audio")
@@ -139,7 +142,10 @@ async def select_audio_format(query: CallbackQuery, state: FSMContext):
         "🎵 **فرمت صوتی را انتخاب کنید:**",
         reply_markup=get_audio_format_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ==================== STEP 3A: VIDEO QUALITY SELECTION ====================
@@ -173,7 +179,10 @@ async def select_video_quality(query: CallbackQuery, state: FSMContext):
         "<i>ℹ️ اگر مطمئن نیستید H.264 را انتخاب کنید</i>",
         reply_markup=get_video_codec_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ==================== STEP 4: VIDEO CODEC SELECTION ====================
@@ -206,7 +215,10 @@ async def select_video_codec(query: CallbackQuery, state: FSMContext):
         "یا بدون زیرنویس",
         reply_markup=get_subtitle_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ==================== STEP 5: SUBTITLE SELECTION ====================
@@ -237,7 +249,10 @@ async def select_video_subtitle(query: CallbackQuery, state: FSMContext):
         "• 📁 فایل - دانلود کامل",
         reply_markup=get_send_as_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 # ==================== STEP 6: SEND AS SELECTION ====================
@@ -479,7 +494,10 @@ async def back_to_format(query: CallbackQuery, state: FSMContext):
         "🎯 **نوع فایل دریافتی را انتخاب کنید:**",
         reply_markup=get_format_type_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "back_to_quality")
@@ -490,7 +508,10 @@ async def back_to_quality(query: CallbackQuery, state: FSMContext):
         "📺 **کیفیت ویدیو را انتخاب کنید:**",
         reply_markup=get_video_quality_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "back_to_codec")
@@ -501,7 +522,10 @@ async def back_to_codec(query: CallbackQuery, state: FSMContext):
         "🎞️ **کدک ویدیو را انتخاب کنید:**",
         reply_markup=get_video_codec_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "back_to_subtitle")
@@ -512,7 +536,10 @@ async def back_to_subtitle(query: CallbackQuery, state: FSMContext):
         "📝 **زیرنویس می‌خواهید؟**",
         reply_markup=get_subtitle_keyboard()
     )
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
 
 __all__ = ["router"]

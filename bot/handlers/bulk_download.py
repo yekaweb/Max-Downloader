@@ -28,7 +28,10 @@ async def show_bulk_download_menu(query: types.CallbackQuery, state: FSMContext)
     """
     نمایش منوی دانلود چندگانه
     """
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -59,7 +62,10 @@ async def start_bulk_download(query: types.CallbackQuery, state: FSMContext):
     """
     شروع حالت دریافت چندین لینک
     """
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     await query.message.edit_text(
         "📥 **دانلود چندگانه**\n\n"
         "لطفاً چند لینک را ارسال کنید (هر یکی در سطر جداگانه)\n\n"
@@ -161,7 +167,10 @@ async def check_bulk_status(query: types.CallbackQuery, state: FSMContext):
     """
     بررسی وضعیت دانلود‌های چندگانه
     """
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     
     try:
         coordinator = await get_coordinator()

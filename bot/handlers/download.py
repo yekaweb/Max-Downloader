@@ -21,6 +21,9 @@ from bot.keyboards.inline.cache_keyboards import (
     get_cached_qualities_keyboard,
 )
 
+from bot.handlers.session import get_session, clear_session
+from utils.format_sizes import get_exact_format_sizes
+
 from services.hash_service import HashService
 from services import DownloadService
 from modules import get_downloader, get_all_downloaders
@@ -153,12 +156,43 @@ async def handle_url(message: types.Message, state: FSMContext, session: AsyncSe
         normalized_url=normalized_url,
         handler_name=handler.__class__.__name__,
     )
+
+    # NEW PIPELINE INTEGRATION
+    user_id = message.from_user.id
+    session_data = get_session(user_id)
+    session_data["url"] = text
+    session_data["format_type"] = None
+    session_data["quality"] = None
+    session_data["codec"] = None
+    session_data["subtitle"] = None
+    session_data["send_as"] = None
+
+    loading_msg = await message.reply("🔄 <b>در حال دریافت اطلاعات ویدیو...</b>", parse_mode="HTML")
+    format_info = await get_exact_format_sizes(text)
+    
+    try:
+        await loading_msg.delete()
+    except Exception:
+        pass
+
+    if "error" in format_info:
+        await message.reply(
+            f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
+            f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
+            f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
+            parse_mode="HTML",
+        )
+        clear_session(user_id)
+        await state.clear()
+        return
+
+    session_data["format_info"] = format_info
     await state.set_state(DownloadStates.selecting_format_type)
 
     await message.reply(
-        "🎯 **نوع فایل دریافتی را انتخاب کنید:**",
+        "🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>",
         reply_markup=get_format_type_keyboard(),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 
@@ -338,14 +372,37 @@ async def download_new_callback(query: CallbackQuery, state: FSMContext):
 
     logger.info(f"[PRO CACHE] User requested fresh download for: {url[:60]}...")
 
-    # Move to normal download flow
+    # NEW PIPELINE INTEGRATION
+    user_id = query.from_user.id
+    session_data = get_session(user_id)
+    session_data["url"] = url
+    session_data["format_type"] = None
+    session_data["quality"] = None
+    session_data["codec"] = None
+    session_data["subtitle"] = None
+    session_data["send_as"] = None
+
+    await query.message.edit_text("🔄 <b>در حال دریافت اطلاعات ویدیو...</b>", parse_mode="HTML")
+    format_info = await get_exact_format_sizes(url)
+
+    if "error" in format_info:
+        await query.message.edit_text(
+            f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
+            f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
+            f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
+            parse_mode="HTML",
+        )
+        clear_session(user_id)
+        await state.clear()
+        return
+
+    session_data["format_info"] = format_info
     await state.set_state(DownloadStates.selecting_format_type)
 
     await query.message.edit_text(
-        "🔄 **جستجوی کیفیت‌های جدید**\n\n"
-        "⏳ در حال انتقال به بخش دانلود...",
+        "🎯 <b>نوع فایل دریافتی را انتخاب کنید:</b>",
         reply_markup=get_format_type_keyboard(),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 

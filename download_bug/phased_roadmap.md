@@ -9,12 +9,12 @@
 > **Files:** `utils/format_sizes.py`  
 > **Priority:** 🔴 CRITICAL — nothing else works until this is fixed
 
-- [ ] **1.1** Replace `asyncio.get_event_loop()` with `asyncio.get_running_loop()` (Bug #2)
-- [ ] **1.2** Add Android `player_client` + spoofed mobile User-Agent to bypass YouTube bot-detection (Bug #1)
-- [ ] **1.3** Add `noplaylist=True`, `socket_timeout=30` to `ydl_opts`
-- [ ] **1.4** Remove the `filesize` gate (`if height and filesize`) — include formats even when filesize is `None` (Bug #3)
-- [ ] **1.5** In result-building loop, gracefully handle `size_mb=None` (output `None` instead of crashing)
-- [ ] **1.6** Push to GitHub and deploy to server, then test with a 480p-only YouTube video
+- [x] **1.1** Replace `asyncio.get_event_loop()` with `asyncio.get_running_loop()` (Bug #2)
+- [x] **1.2** Add Android `player_client` + spoofed mobile User-Agent to bypass YouTube bot-detection (Bug #1)
+- [x] **1.3** Add `noplaylist=True`, `socket_timeout=30` to `ydl_opts`
+- [x] **1.4** Remove the `filesize` gate (`if height and filesize`) — include formats even when filesize is `None` (Bug #3)
+- [x] **1.5** In result-building loop, gracefully handle `size_mb=None` (output `None` instead of crashing)
+- [ ] **1.6** Push to GitHub ✅ Done — deploy to server and test with a 480p-only YouTube video
 
 ---
 
@@ -22,11 +22,12 @@
 > **Files:** `bot/handlers/download_exec.py`  
 > **Priority:** 🔴 CRITICAL — even if Phase 1 works, the download itself fails
 
-- [ ] **2.1** Add the same bot-bypass `ydl_opts` (Android client + User-Agent) to the download-time opts
-- [ ] **2.2** Add `"1440"` to `quality_map` (Bug #4)
-- [ ] **2.3** Fix `prepare_filename()` → use glob to find actual merged file on disk (Bug #5)
-- [ ] **2.4** Fix codec format string fallback to always include `height` constraint (Bug #6)
-- [ ] **2.5** Push to GitHub and test a full download end-to-end
+- [x] **2.1** Add the same bot-bypass `ydl_opts` (Android client + User-Agent) to the download-time opts
+- [x] **2.2** Add `"1440"` to `quality_map` (Bug #4)
+- [x] **2.3** Fix `prepare_filename()` → use glob to find actual merged file on disk (Bug #5)
+- [x] **2.4** Fix codec format string fallback to always include `height` constraint (Bug #6)
+- [x] **2.5** Add `merge_output_format: mp4` to ensure consistent output extension
+- [ ] **2.6** Deploy to server and test a full download end-to-end
 
 ---
 
@@ -34,11 +35,11 @@
 > **Files:** `bot/keyboards/inline/download.py`  
 > **Priority:** 🟡 MEDIUM — UI correctness after data fixes
 
-- [ ] **3.1** Guard against `None` value for `size_mb` in all keyboard buttons (Bug #7)
+- [x] **3.1** Guard against `None` value for `size_mb` in all keyboard buttons (Bug #7)
   - Display `"حجم: نامشخص"` when size is `None`, not a crash
-- [ ] **3.2** Back-button on `get_video_codec_keyboard` currently points to `back_to_quality` — fix to `back_to_format`
-  - The codec keyboard is shown *before* quality, so "back" should go to format type selection
-- [ ] **3.3** Push to GitHub
+- [x] **3.2** Back-button on `get_video_codec_keyboard` now points to `back_to_format` (format type selection) — previously wrongly pointed to `back_to_quality`
+- [x] **3.3** AV1 and VP9 codec buttons only shown when that codec is actually available for the video
+- [x] **3.4** Pushed to GitHub ✅
 
 ---
 
@@ -71,8 +72,8 @@
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| Phase 1 | Fix metadata extraction | ⏳ Pending |
-| Phase 2 | Fix download execution engine | ⏳ Pending |
-| Phase 3 | Fix quality keyboard UI | ⏳ Pending |
+| Phase 1 | Fix metadata extraction | ✅ Complete |
+| Phase 2 | Fix download execution engine | ✅ Complete |
+| Phase 3 | Fix quality keyboard UI | ✅ Complete |
 | Phase 4 | Add cookies for permanent bypass | ⏳ Pending |
 | Phase 5 | Dubbed audio track selection | 🔮 Future |

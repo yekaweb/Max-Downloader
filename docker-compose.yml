@@ -56,8 +56,9 @@ services:
       - temp_downloads:/app/temp_downloads
       - cached_files:/app/cached_files
       - ./logs:/app/logs
-      # Phase 4.4: mount cookies.txt if it exists (read-only)
+      # Phase 4.4: mount cookies.txt and proxies.txt if they exist (read-only)
       - ./cookies.txt:/app/cookies.txt:ro
+      - ./proxies.txt:/app/proxies.txt:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -104,6 +105,7 @@ services:
       - ./logs:/app/logs
       # Phase 4.4: mount cookies.txt if it exists (read-only)
       - ./cookies.txt:/app/cookies.txt:ro
+      - ./proxies.txt:/app/proxies.txt:ro
     depends_on:
       postgres:
         condition: service_healthy

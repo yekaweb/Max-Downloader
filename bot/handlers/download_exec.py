@@ -152,6 +152,11 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 "preferredquality": audio_fmt.get("bitrate", "128"),
             }]
 
+        from utils.proxy_manager import get_random_proxy
+        proxy = get_random_proxy()
+        if proxy:
+            ydl_opts['proxy'] = proxy
+
         filename = None
         
         import asyncio

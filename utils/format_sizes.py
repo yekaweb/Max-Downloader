@@ -40,6 +40,12 @@ def _build_ydl_opts(extra: dict = None) -> dict:
         },
     }
 
+    # Integrate proxy rotation if proxies.txt exists
+    from utils.proxy_manager import get_random_proxy
+    proxy = get_random_proxy()
+    if proxy:
+        opts['proxy'] = proxy
+
     # 2. Advanced Bypass: Prefer native OAuth2 token if generated
     oauth_token_path = os.path.join(cache_dir, 'youtube_oauth2_tokens.json')
     if os.path.isfile(oauth_token_path):

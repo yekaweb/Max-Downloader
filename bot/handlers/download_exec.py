@@ -204,6 +204,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         import functools
         
         def run_ytdlp():
+            import glob
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 raw_name = ydl.prepare_filename(info)

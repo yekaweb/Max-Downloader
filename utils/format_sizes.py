@@ -43,7 +43,12 @@ def _build_ydl_opts(extra: dict = None) -> dict:
     return opts
 
 # Pre-built opts for metadata extraction only (no download)
-_EXTRACT_YDL_OPTS = _build_ydl_opts({'skip_download': True, 'extract_flat': False})
+_EXTRACT_YDL_OPTS = _build_ydl_opts({
+    'skip_download': True,
+    'extract_flat': False,
+    'ignore_no_formats_error': True,  # Prevent crash if default format doesn't match
+    'format': 'all',  # Fetch metadata for all formats to ensure robust extraction
+})
 
 
 

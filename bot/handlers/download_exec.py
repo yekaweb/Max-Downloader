@@ -256,15 +256,16 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         import bot.loader
         pyrogram_client = getattr(bot.loader, "pyrogram_client", None)
         
+        sent_msg = None
         if file_size_mb > 49 and pyrogram_client:
             await progress_msg.edit_text("⬆️ در حال آپلود فایل بزرگ (Pyrogram)...")
             from services.file_service import FileService
             file_svc = FileService(temp_dir="temp_downloads", cache_dir="cached_files", pyrogram_client=pyrogram_client)
             
             async def progress_callback(current, total):
-                pass  # Minimal callback to prevent errors; complex progress handling can be added later
+                pass
                 
-            await file_svc.upload_to_telegram(
+            sent_msg = await file_svc.upload_to_telegram(
                 file_path=filename,
                 chat_id=message.chat.id,
                 caption=caption,
@@ -272,15 +273,56 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             )
         else:
             if format_type == "video" and send_as == "video":
-                await message.reply_video(
+                sent_msg = await message.reply_video(
                     FSInputFile(filename),
                     caption=caption,
                 )
             else:
-                await message.reply_document(
+                sent_msg = await message.reply_document(
                     FSInputFile(filename),
                     caption=caption,
                 )
+
+        # Pro Cache write-back
+        if sent_msg:
+            try:
+                telegram_file_id = None
+                if getattr(sent_msg, "video", None):
+                    telegram_file_id = sent_msg.video.file_id
+                elif getattr(sent_msg, "document", None):
+                    telegram_file_id = sent_msg.document.file_id
+                elif getattr(sent_msg, "audio", None):
+                    telegram_file_id = sent_msg.audio.file_id
+
+                if telegram_file_id:
+                    from services.hash_service import HashService
+                    from database.repositories.cached_download_repo import CachedDownloadRepository
+                    hs = HashService()
+                    u_info = hs.get_url_info(url)
+                    u_hash = u_info.get("hash")
+                    u_plat = u_info.get("platform") or "youtube"
+                    quality_str = session_data.get("quality", "720")
+                    codec_str = session_data.get("codec", "h264")
+
+                    async with AsyncSessionLocal() as db_session:
+                        c_repo = CachedDownloadRepository(db_session)
+                        await c_repo.create_from_upload(
+                            source_url=url,
+                            source_platform=u_plat,
+                            media_title=os.path.basename(filename),
+                            media_duration=None,
+                            media_uploader=None,
+                            telegram_file_id=telegram_file_id,
+                            file_size=file_size,
+                            file_type="video/mp4" if format_type == "video" else "audio/mp3",
+                            quality=str(quality_str),
+                            format_codec=str(codec_str),
+                            format_container=os.path.splitext(filename)[1].lstrip("."),
+                            url_hash=u_hash,
+                        )
+            except Exception as cache_err:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to save Pro Cache file_id: {cache_err}")
 
     except yt_dlp.utils.DownloadError as e:
         msg = str(e).lower()

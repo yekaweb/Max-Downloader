@@ -7,7 +7,18 @@ from typing import Optional, Callable, Union
 from datetime import datetime
 
 import aiofiles
-from pyrogram import Client
+import asyncio
+
+try:
+    from pyrogram import Client
+except RuntimeError:
+    try:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        from pyrogram import Client
+    except Exception:
+        Client = None
+except ImportError:
+    Client = None
 
 logger = logging.getLogger(__name__)
 

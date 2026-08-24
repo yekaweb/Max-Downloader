@@ -30,8 +30,8 @@ async def health():
     """Health check endpoint"""
     return {
         "status": "ok",
-        "version": "1.0.0",
-        "environment": settings.environment,
+        "version": app_settings.APP_VERSION,
+        "environment": app_settings.APP_ENV,
     }
 
 

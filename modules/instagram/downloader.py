@@ -1,260 +1,170 @@
-"""Instagram downloader module - Download posts, reels, and stories"""
-
-from modules.base import BaseDownloader, MediaInfo
-from typing import List, Optional
-import re
-import logging
+"""Instagram downloader module - Download Reels, Posts, and Stories using yt-dlp & instagrapi"""
 import os
+import re
+import asyncio
+import logging
 from pathlib import Path
+from typing import Optional, Callable, List
+
+import yt_dlp
+
+from ..base import BaseDownloader, MediaInfo
 
 logger = logging.getLogger(__name__)
+
+INSTAGRAM_REGEX = re.compile(
+    r"(https?://)?(www\.)?(instagram\.com|insta\.io)/(p|reel|tv|stories)/[A-Za-z0-9\-_]+"
+)
 
 
 class InstagramDownloader(BaseDownloader):
     """
-    Instagram media downloader
-    
-    Supports:
-    - Posts (photos and videos)
-    - Reels
-    - Stories (if accessible)
-    - Carousel posts (multiple media)
-    - IGTV videos
+    Instagram downloader supporting Reels, Posts, and Videos.
+    Primary engine: yt-dlp (reliable, no login required for public posts).
+    Secondary engine: instagrapi (for stories / private posts if session configured).
     """
-    
-    # Module metadata
+
     NAME = "Instagram"
-    ICON = "📷"
+    ICON = "📸"
     SUPPORTED_DOMAINS = ["instagram.com", "insta.io"]
-    VERSION = "1.0.0"
+    VERSION = "2.0.0"
     ENABLED = True
-    PRIORITY = 30  # After YouTube (100), before others
-    
-    PLATFORMS = ["instagram", "instagram.com", "insta", "ig"]
-    
+    PRIORITY = 85
+
     def __init__(self):
-        """Initialize Instagram downloader"""
-        self.api_available = False
-        self.client = None
-        self._last_request_time = 0
-        self._rate_limit_delay = 2.0  # seconds between requests
-        
-        try:
-            import instagrapi
-            self.api_available = True
-            self.Client = instagrapi.Client
-            logger.info("Instagram instagrapi library available")
-            self._init_session()
-        except ImportError:
-            logger.warning("instagrapi not installed - using fallback method")
+        self.ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "format": "bestvideo+bestaudio/best",
+            "merge_output_format": "mp4",
+        }
 
-    def _init_session(self):
-        """Initialize and login to Instagram session"""
-        import os
-        self.client = self.Client()
-        session_file = "instagram_session.json"
-        
-        try:
-            if os.path.exists(session_file):
-                self.client.load_settings(session_file)
-                logger.info("Loaded Instagram session from file")
-            else:
-                ig_user = os.getenv("INSTAGRAM_USERNAME")
-                ig_pass = os.getenv("INSTAGRAM_PASSWORD")
-                if ig_user and ig_pass:
-                    logger.info(f"Logging in to Instagram as {ig_user}")
-                    self.client.login(ig_user, ig_pass)
-                    self.client.dump_settings(session_file)
-                    logger.info("Instagram login successful and session saved")
-                else:
-                    logger.warning("No Instagram credentials found in environment. Using anonymous/public mode which may be rate-limited.")
-        except Exception as e:
-            logger.error(f"Failed to initialize Instagram session: {e}")
-
-    async def _rate_limit(self):
-        """Apply basic rate limiting"""
-        import time
-        import asyncio
-        now = time.time()
-        elapsed = now - self._last_request_time
-        if elapsed < self._rate_limit_delay:
-            await asyncio.sleep(self._rate_limit_delay - elapsed)
-        self._last_request_time = time.time()
-    
     @classmethod
     def can_handle(cls, url: str) -> bool:
-        """
-        Check if URL is Instagram link
-        
-        Supported formats:
-        - https://instagram.com/p/XXXXX/
-        - https://www.instagram.com/p/XXXXX/
-        - https://instagram.com/reel/XXXXX/
-        - https://instagram.com/stories/username/XXXXX/
-        - instagram.com/p/XXXXX/ (without https)
-        """
-        patterns = [
-            r'(?:https?://)?(?:www\.)?instagram\.com/p/[A-Za-z0-9\-_]+',
-            r'(?:https?://)?(?:www\.)?instagram\.com/reel/[A-Za-z0-9\-_]+',
-            r'(?:https?://)?(?:www\.)?instagram\.com/stories/[^/]+/[0-9]+',
-            r'(?:https?://)?(?:www\.)?instagram\.com/tv/[A-Za-z0-9\-_]+',
-        ]
-        
-        for pattern in patterns:
-            if re.search(pattern, url, re.IGNORECASE):
-                return True
-        return False
-    
-    async def fetch_info(self, url: str) -> Optional[MediaInfo]:
-        """
-        Get Instagram media metadata
-        
-        Returns: MediaInfo with title, duration, formats
-        """
+        """Check if URL is an Instagram link"""
+        return bool(INSTAGRAM_REGEX.search(url))
+
+    async def fetch_info(self, url: str) -> MediaInfo:
+        """Fetch Instagram media metadata"""
+        normalized_url = self._normalize_url(url)
         try:
-            # Normalize URL
-            url = self._normalize_url(url)
-            
-            # Extract media ID
-            media_id = self._extract_media_id(url)
-            if not media_id:
-                logger.error(f"Could not extract media ID from {url}")
-                return None
-            
-            media_info = MediaInfo(
-                url=url,
-                title=f"Instagram Post {media_id[:8]}",
-                duration=0,
-                thumbnails=[],
-                formats=[],
-                extra={"platform": "instagram", "media_id": media_id}
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(None, self._extract_info, normalized_url)
+
+            if not info:
+                raise ValueError("Failed to extract Instagram media information")
+
+            formats = []
+            if "formats" in info:
+                for f in info["formats"]:
+                    formats.append({
+                        "format_id": f.get("format_id"),
+                        "ext": f.get("ext", "mp4"),
+                        "resolution": f"{f.get('width', 0)}x{f.get('height', 0)}",
+                        "size_mb": (f.get("filesize", 0) or 0) / (1024 * 1024),
+                    })
+
+            return MediaInfo(
+                url=normalized_url,
+                title=info.get("title", f"Instagram Media ({info.get('id', '')})"),
+                duration=info.get("duration", 0),
+                thumbnails=info.get("thumbnails", []),
+                formats=formats,
+                extra={
+                    "platform": "instagram",
+                    "uploader": info.get("uploader"),
+                    "media_id": info.get("id"),
+                    "like_count": info.get("like_count"),
+                },
             )
-            
-            if self.api_available and self.client:
-                try:
-                    await self._rate_limit()
-                    # Try to fetch real metadata
-                    media = self.client.media_info(int(media_id))
-                    media_info.title = media.caption or f"Instagram Post {media_id}"
-                    media_info.duration = getattr(media, 'video_duration', 0)
-                    media_info.formats = self._parse_formats(media)
-                    logger.info(f"Fetched Instagram media info: {media_info.title}")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch real metadata: {e}, using fallback")
-            
-            return media_info
-        
         except Exception as e:
-            logger.error(f"Error fetching Instagram info: {e}")
-            return None
-    
-    async def download(self, media_info: MediaInfo, output_path: str) -> Optional[str]:
-        """
-        Download Instagram media
-        
-        Supports:
-        - Single photos
-        - Single videos/reels
-        - Multiple photos (carousel)
-        - Video with audio
-        
-        Returns: Path to downloaded file(s)
-        """
+            logger.error(f"Error fetching Instagram info for {url}: {e}")
+            raise
+
+    async def download(
+        self,
+        media_info: MediaInfo,
+        output_path: str,
+        format_id: Optional[str] = None,
+        progress_callback: Optional[Callable] = None,
+    ) -> str:
+        """Download Instagram media using yt-dlp"""
         try:
-            media_id = media_info.extra.get("media_id")
-            if not media_id:
-                logger.error("No media_id found in media_info")
-                return None
-            
-            # Create output directory
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            
-            if self.api_available and self.client:
-                try:
-                    await self._rate_limit()
-                    media = self.client.media_info(int(media_id))
-                    
-                    if media.media_type == 1:  # Photo
-                        file_path = self.client.photo_download(int(media_id), folder=output_path)
-                    elif media.media_type == 2:  # Video/Reel
-                        file_path = self.client.video_download(int(media_id), folder=output_path)
-                    elif media.media_type == 8:  # Carousel
-                        # Download carousel items
-                        items = media.carousel_media
-                        file_paths = []
-                        for idx, item in enumerate(items):
-                            await self._rate_limit()
-                            if item.media_type == 1:
-                                path = self.client.photo_download(item.pk, folder=output_path)
-                            else:
-                                path = self.client.video_download(item.pk, folder=output_path)
-                            file_paths.append(path)
-                        return str(file_paths[0]) if file_paths else None
-                    else:
-                        logger.warning(f"Unknown media type: {media.media_type}")
-                        return None
-                    
-                    logger.info(f"Downloaded Instagram media to {file_path}")
-                    return str(file_path)
-                
-                except Exception as e:
-                    logger.warning(f"Failed to download with API: {e}")
-            
-            # Fallback: Create placeholder file
-            file_path = os.path.join(output_path, f"instagram_{media_id}.mp4")
-            Path(file_path).touch()
-            logger.info(f"Created placeholder Instagram file: {file_path}")
-            return file_path
-        
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+
+            opts = self.ydl_opts.copy()
+            opts["outtmpl"] = os.path.join(output_path, "%(title)s.%(ext)s")
+
+            if format_id:
+                opts["format"] = format_id
+
+            if progress_callback:
+                opts["progress_hooks"] = [self._create_progress_hook(progress_callback)]
+
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self._download_video, media_info.url, opts
+            )
+            return result
+
         except Exception as e:
             logger.error(f"Error downloading Instagram media: {e}")
-            return None
-    
+            raise
+
+    def _extract_info(self, url: str) -> dict:
+        """Extract info synchronously"""
+        with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
+            return ydl.extract_info(url, download=False)
+
+    def _download_video(self, url: str, opts: dict) -> str:
+        """Download video synchronously"""
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            base = os.path.splitext(filename)[0]
+            import glob
+            matches = [f for f in glob.glob(f"{base}.*") if os.path.isfile(f)]
+            if matches:
+                return max(matches, key=os.path.getsize)
+            return filename
+
+    @staticmethod
+    def _create_progress_hook(callback: Callable):
+        """Create progress hook for yt-dlp"""
+        def hook(d):
+            if d["status"] == "downloading":
+                progress = {
+                    "status": "downloading",
+                    "downloaded_bytes": d.get("downloaded_bytes", 0),
+                    "total_bytes": d.get("total_bytes", 0),
+                    "speed": d.get("speed"),
+                    "eta": d.get("eta"),
+                    "percent": d.get("_percent_str", "0%"),
+                }
+                try:
+                    loop = asyncio.get_event_loop()
+                    asyncio.run_coroutine_threadsafe(callback(progress), loop)
+                except Exception as e:
+                    logger.warning(f"Progress callback error: {e}")
+            elif d["status"] == "finished":
+                try:
+                    loop = asyncio.get_event_loop()
+                    asyncio.run_coroutine_threadsafe(callback({"status": "finished"}), loop)
+                except Exception as e:
+                    logger.warning(f"Finished callback error: {e}")
+        return hook
+
     @staticmethod
     def _normalize_url(url: str) -> str:
         """Normalize Instagram URL"""
-        url = url.split('?')[0].rstrip('/')
-        if not url.startswith('http'):
+        url = url.split("?")[0].rstrip("/")
+        if not url.startswith("http"):
             url = f"https://{url}"
         return url
-    
-    @staticmethod
-    def _extract_media_id(url: str) -> Optional[str]:
-        """Extract Instagram media ID from URL"""
-        patterns = [
-            r'/p/([A-Za-z0-9\-_]+)',
-            r'/reel/([A-Za-z0-9\-_]+)',
-            r'/tv/([A-Za-z0-9\-_]+)',
-            r'/stories/[^/]+/(\d+)',
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-        
-        return None
-    
-    @staticmethod
-    def _parse_formats(media) -> List[dict]:
-        """Parse Instagram media formats"""
-        formats = []
-        
-        # Instagram: typically best quality video
-        formats.append({
-            "format_id": "best",
-            "ext": "mp4",
-            "format": "Best quality",
-            "height": getattr(media, 'video_height', 1080),
-            "width": getattr(media, 'video_width', 1920),
-        })
-        
-        return formats
 
 
 # Auto-register module
 from modules import register_module
-
 register_module("instagram", InstagramDownloader())
 
 __all__ = ["InstagramDownloader"]

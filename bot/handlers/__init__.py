@@ -18,6 +18,7 @@ from .admin_panel import router as admin_panel_router
 from .download import router as download_flow_router
 from .errors import router as errors_router
 from .admin import bonus_coins_router
+from .donation import router as donation_router
 
 routers = [
     start_router,
@@ -29,6 +30,7 @@ routers = [
     history_router,
     help_router,
     referral_router,
+    donation_router,
     coin_conversion_router,
     payment_router,
     payment_rial_router,

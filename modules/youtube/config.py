@@ -1,19 +1,31 @@
 """YouTube downloader configuration"""
 
+import os
+from pathlib import Path
+
+COOKIE_FILE = Path("/root/Max-Downloader/cookies.txt")
+
 YOUTUBE_CONFIG = {
     "ydl_opts": {
         # Video quality and format settings
         "format": "bestvideo+bestaudio/best",
-        "quiet": False,
-        "no_warnings": False,
+        "quiet": True,
+        "no_warnings": True,
         "prefer_insecure": False,
-        # Networking
-        "socket_timeout": 30,
+        "cookiefile": str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
         "extractor_args": {
             "youtube": {
-                "lang": ["en"],  # Subtitles language
+                "player_client": ["android", "web_safari", "mweb", "ios"],
+                "lang": ["en", "fa"],
             }
         },
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "http_headers": {
+            "Accept-Language": "en-US,en;q=0.9,fa;q=0.8",
+            "Sec-Fetch-Mode": "navigate",
+        },
+        # Networking
+        "socket_timeout": 30,
         # Post-processing
         "postprocessors": [
             {
@@ -24,16 +36,13 @@ YOUTUBE_CONFIG = {
             }
         ],
         # Download settings
-        "http_chunk_size": 1024 * 1024,  # 1MB chunks
-        "buffer_size": 1024 * 20,  # 20KB buffer
-        "ratelimit": None,  # No rate limiting
+        "http_chunk_size": 1024 * 1024 * 5,  # 5MB chunks
+        "buffer_size": 1024 * 64,            # 64KB buffer
+        "ratelimit": None,
         # Retry settings
-        "retries": 5,
-        "fragment_retries": 5,
+        "retries": 10,
+        "fragment_retries": 10,
         "skip_unavailable_fragments": True,
-        # Logging
-        "quiet": True,
-        "no_warnings": True,
     },
     # Download timeout in seconds
     "download_timeout": 3600,  # 1 hour

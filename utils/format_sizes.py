@@ -9,15 +9,16 @@ try:
 except ImportError:
     yt_dlp = None
 
-# Path to optional cookies file (place cookies.txt in project root on the server)
-# Export from Chrome/Firefox using "Get cookies.txt LOCALLY" extension
-COOKIES_FILE = "/app/cookies.txt"
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+COOKIES_FILE = BASE_DIR / "cookies.txt"
 
 def _build_ydl_opts(extra: dict = None) -> dict:
     """Build yt-dlp options with bot-detection bypass and optional cookies/OAuth2."""
     
     # 1. Professional Anti-Bot System: Persistent Cache
-    cache_dir = '/app/cached_files/yt_dlp_cache'
+    cache_dir = str(BASE_DIR / "cached_files" / "yt_dlp_cache")
     
     opts = {
         'quiet': True,
@@ -25,19 +26,25 @@ def _build_ydl_opts(extra: dict = None) -> dict:
         'noplaylist': True,
         'socket_timeout': 30,
         'cachedir': cache_dir,
+        'cookiefile': str(COOKIES_FILE) if COOKIES_FILE.is_file() else None,
         # Rotate clients to mimic real users and bypass blocks
         'extractor_args': {
             'youtube': {
-                'player_client': ['web', 'android', 'ios'],
+                'player_client': ['android', 'web_safari', 'mweb', 'ios'],
+                'lang': ['en', 'fa'],
             }
         },
         'http_headers': {
             'User-Agent': (
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                 'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/120.0.0.0 Safari/537.36'
+                'Chrome/128.0.0.0 Safari/537.36'
             ),
+            'Accept-Language': 'en-US,en;q=0.9,fa;q=0.8',
         },
+        'retries': 10,
+        'fragment_retries': 10,
+        'skip_unavailable_fragments': True,
     }
 
     # Integrate proxy rotation if proxies.txt exists
@@ -51,9 +58,8 @@ def _build_ydl_opts(extra: dict = None) -> dict:
     if os.path.isfile(oauth_token_path):
         opts['username'] = 'oauth2'
         opts['password'] = ''
-    # 3. Fallback: Use cookies.txt if provided
-    elif os.path.isfile(COOKIES_FILE):
-        opts['cookiefile'] = COOKIES_FILE
+    elif COOKIES_FILE.is_file():
+        opts['cookiefile'] = str(COOKIES_FILE)
 
     if extra:
         opts.update(extra)

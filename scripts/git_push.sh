@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Clean and safe git push script for Max-Downloader
-set -e
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_DIR"
 
 MSG="${1:-Auto update}"
-echo "📦 Adding changes to git..."
+echo "📦 Adding changes to git in $REPO_DIR..."
 git add .
 
 echo "📝 Committing: $MSG"

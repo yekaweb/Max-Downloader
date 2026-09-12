@@ -12,6 +12,7 @@ from .models import (
     Channel,
 )
 from .cached_download import CachedDownload, CachedQuality
+from .google_account_pool import GoogleAccount
 
 __all__ = [
     "Base",
@@ -26,4 +27,5 @@ __all__ = [
     "Channel",
     "CachedDownload",
     "CachedQuality",
+    "GoogleAccount",
 ]

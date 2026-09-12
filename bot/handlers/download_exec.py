@@ -17,22 +17,30 @@ try:
 except ImportError:
     YTDLP_AVAILABLE = False
 
-# Shared bot-detection bypass options (same as format_sizes.py)
+COOKIE_FILE = Path("/root/Max-Downloader/cookies.txt")
+
+# Shared bot-detection bypass options with Anti-Bot Player Client Spoofing
 _BASE_YDL_OPTS = {
     'socket_timeout': 30,
     'noplaylist': True,
+    'cookiefile': str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'web'],
+            'player_client': ['android', 'web_safari', 'mweb', 'ios'],
+            'lang': ['en', 'fa'],
         }
     },
     'http_headers': {
         'User-Agent': (
-            'Mozilla/5.0 (Linux; Android 11; Pixel 5) '
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
             'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/90.0.4430.91 Mobile Safari/537.36'
+            'Chrome/128.0.0.0 Safari/537.36'
         ),
+        'Accept-Language': 'en-US,en;q=0.9,fa;q=0.8',
     },
+    'retries': 10,
+    'fragment_retries': 10,
+    'skip_unavailable_fragments': True,
 }
 
 
@@ -225,7 +233,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         max_retries = 3
         retry_delay = 2
         filename = None
-        
+        engine_used = "yt-dlp (Native)"
         for attempt in range(1, max_retries + 1):
             try:
                 filename = await loop.run_in_executor(None, run_ytdlp)
@@ -239,7 +247,26 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                     logging.warning(f"Download attempt {attempt} failed: {e}")
                     await asyncio.sleep(retry_delay)
                 else:
-                    raise e
+                    # Fall back to Waterfall Download Service (Tier 2 Cobalt / Tier 3 Direct)
+                    import logging
+                    logging.warning(f"yt-dlp failed after {max_retries} attempts: {e}. Activating Waterfall Multi-Engine Fallback...")
+                    try:
+                        from services.waterfall_download_service import waterfall_download_service
+                        filename, engine_used = await waterfall_download_service.execute_download(
+                            url=url,
+                            format_type=format_type,
+                            quality=session_data.get("quality", "720"),
+                            codec=session_data.get("codec", "h264"),
+                            audio_format=session_data.get("audio_format"),
+                            audio_lang=session_data.get("audio_lang"),
+                            max_filesize=max_file_size,
+                            progress_callback=yt_dlp_progress_callback,
+                        )
+                        if not filename or not os.path.exists(filename):
+                            raise e
+                    except Exception as waterfall_err:
+                        logging.error(f"Waterfall fallback also failed: {waterfall_err}")
+                        raise e
 
         file_size = os.path.getsize(filename)
         file_size_mb = file_size / (1024 * 1024)
@@ -247,7 +274,8 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         caption = (
             f"✅ دانلود موفق!\n\n"
             f"📹 {os.path.basename(filename)}\n"
-            f"💾 {file_size_mb:.1f} MB"
+            f"💾 {file_size_mb:.1f} MB\n"
+            f"⚡ موتور دانلود: {engine_used}"
         )
 
         send_as = session_data.get("send_as", "file")

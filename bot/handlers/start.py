@@ -47,9 +47,9 @@ async def cmd_start(message: Message, session: AsyncSession = None):
         
         kb = [
             [KeyboardButton(text="📥 دانلود جدید (ارسال لینک)"), KeyboardButton(text="👤 پروفایل من")],
-            [KeyboardButton(text="💳 خرید اشتراک / سکه"), KeyboardButton(text="👥 معرفی به دوستان")],
-            [KeyboardButton(text="📊 تاریخچه دانلودها"), KeyboardButton(text="🆘 راهنما / پشتیبانی")],
-            [KeyboardButton(text="⚙️ تنظیمات")]
+            [KeyboardButton(text="👑 اشتراک VIP (اهدای جیمیل)"), KeyboardButton(text="💳 خرید اشتراک / سکه")],
+            [KeyboardButton(text="👥 معرفی به دوستان"), KeyboardButton(text="📊 تاریخچه دانلودها")],
+            [KeyboardButton(text="🆘 راهنما / پشتیبانی"), KeyboardButton(text="⚙️ تنظیمات")]
         ]
         
         # Add Admin button if user is admin

@@ -11,11 +11,13 @@ from bot.handlers.history import show_history
 from bot.handlers.help import show_help
 from bot.handlers.admin_panel import admin_panel
 from bot.handlers.settings_handler import show_settings_panel
+from bot.handlers.donation import cmd_donate
 
 router = Router()
 
 # Register imported handlers directly with text filters
 router.message(F.text == "👤 پروفایل من")(show_profile)
+router.message(F.text == "👑 اشتراک VIP (اهدای جیمیل)")(cmd_donate)
 router.message(F.text == "💳 خرید اشتراک / سکه")(show_plans)
 router.message(F.text == "👥 معرفی به دوستان")(show_referral)
 router.message(F.text == "📊 تاریخچه دانلودها")(show_history)

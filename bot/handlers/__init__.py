@@ -2,7 +2,6 @@
 from .start import router as start_router
 from .url_handler import router as url_router
 from .format_handler import router as format_router
-from .cache_handler import router as cache_router
 from .profile import router as profile_router
 from .plans import router as plans_router
 from .history import router as history_router
@@ -24,7 +23,6 @@ routers = [
     start_router,
     url_router,
     format_router,
-    cache_router,
     profile_router,
     plans_router,
     history_router,

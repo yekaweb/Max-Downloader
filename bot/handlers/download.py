@@ -44,7 +44,7 @@ hash_service = HashService()
 
 
 @router.message(F.text.startswith("http"))
-async def handle_url(message: types.Message, state: FSMContext, session: AsyncSession):
+async def handle_url(message: types.Message, state: FSMContext):
     """
     Handle incoming URL with Pro Cache check.
 
@@ -73,38 +73,45 @@ async def handle_url(message: types.Message, state: FSMContext, session: AsyncSe
     # 3. Check cache by hash
     cached_download = None
     try:
-        repo = CachedDownloadRepository(session)
-        cached_download = await repo.find_valid_by_url_hash(url_hash)
+        from database.connection import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            repo = CachedDownloadRepository(session)
+            cached_download = await repo.find_valid_by_url_hash(url_hash)
 
-        if cached_download:
-            quality_count = len(cached_download.qualities) if cached_download.qualities else 0
-            logger.info(
-                f"[CACHE HIT] hash={url_hash[:12]}... "
-                f"title={cached_download.title[:40] if cached_download.title else 'N/A'}... "
-                f"qualities={quality_count}"
-            )
+            if cached_download and cached_download.qualities:
+                # Eager-load or copy list before session closes
+                cached_qualities_count = len(cached_download.qualities)
+                cached_id = cached_download.id
+                cached_title = cached_download.title
+                cached_duration = cached_download.duration
+                cached_access_count = cached_download.access_count
+            else:
+                cached_qualities_count = 0
+                cached_id = None
     except SQLAlchemyError as e:
         logger.warning(f"[CACHE] Database error during lookup: {e}")
+        cached_qualities_count = 0
+        cached_id = None
 
     # 4. Cache found → Show 3-button UI
-    if cached_download and cached_download.qualities:
-        quality_count = len(cached_download.qualities)
+    if cached_download and cached_qualities_count > 0:
+        quality_count = cached_qualities_count
 
         # Build title preview
         title_preview = (
-            cached_download.title[:80] + "..."
-            if cached_download.title and len(cached_download.title) > 80
-            else (cached_download.title or "بدون عنوان")
+            cached_title[:80] + "..."
+            if cached_title and len(cached_title) > 80
+            else (cached_title or "بدون عنوان")
         )
 
         # Build caption text
         duration_text = ""
-        if cached_download.duration:
-            mins = cached_download.duration // 60
-            secs = cached_download.duration % 60
+        if cached_duration:
+            mins = cached_duration // 60
+            secs = cached_duration % 60
             duration_text = f"\n⏱ مدت: {mins}:{secs:02d}"
 
-        access_text = f"\n📊 تعداد دریافت: {cached_download.access_count} بار"
+        access_text = f"\n📊 تعداد دریافت: {cached_access_count} بار"
 
         caption = (
             f"✅ **این محتوا قبلاً دانلود شده!**\n\n"
@@ -113,8 +120,8 @@ async def handle_url(message: types.Message, state: FSMContext, session: AsyncSe
             f"🎯 یکی از گزینه‌های زیر را انتخاب کنید:"
         )
 
-        # 3-button keyboard (use cached_download.id to stay well under 64-byte Telegram limit)
-        kb = get_cache_options_keyboard(quality_count, cached_download.id)
+        # 3-button keyboard (use cached_id to stay well under 64-byte Telegram limit)
+        kb = get_cache_options_keyboard(quality_count, cached_id)
 
         # Save URL info in state for later use
         await state.update_data(
@@ -122,7 +129,7 @@ async def handle_url(message: types.Message, state: FSMContext, session: AsyncSe
             url_hash=url_hash,
             platform=platform,
             normalized_url=normalized_url,
-            cached_download_id=cached_download.id,
+            cached_download_id=cached_id,
             from_cache=True,
         )
         await state.set_state(DownloadStates.viewing_cached_files)
@@ -206,7 +213,7 @@ from aiogram import Bot
 
 @router.callback_query(F.data.startswith("show_cached:"))
 async def show_cached_qualities(
-    query: CallbackQuery, state: FSMContext, session: AsyncSession
+    query: CallbackQuery, state: FSMContext
 ):
     """
     Handle 📚 button: Show list of cached qualities for selection.
@@ -221,20 +228,23 @@ async def show_cached_qualities(
     logger.info(f"[PRO CACHE] Showing qualities for param: {param}")
 
     try:
-        repo = CachedDownloadRepository(session)
-        if param.isdigit():
-            cached_download = await repo.get_by_id(int(param))
-        else:
-            cached_download = await repo.find_valid_by_url_hash(param)
+        from database.connection import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            repo = CachedDownloadRepository(session)
+            if param.isdigit():
+                cached_download = await repo.get_by_id(int(param))
+            else:
+                cached_download = await repo.find_valid_by_url_hash(param)
 
-        if not cached_download or not cached_download.qualities:
-            await query.answer("❌ کیفیت‌های کش شده یافت نشد", show_alert=True)
-            return
+            if not cached_download or not cached_download.qualities:
+                await query.answer("❌ کیفیت‌های کش شده یافت نشد", show_alert=True)
+                return
 
-        qualities = cached_download.qualities
+            qualities = list(cached_download.qualities)
+            title = cached_download.title or "بدون عنوان"
+            cached_id = cached_download.id
 
         # Build caption with quality list
-        title = cached_download.title or "بدون عنوان"
         caption = f"📋 **کیفیت‌های موجود در آرشیو**\n\n📹 {title[:60]}\n\n"
 
         for i, q in enumerate(qualities, 1):
@@ -246,7 +256,7 @@ async def show_cached_qualities(
         kb = get_cached_qualities_keyboard(qualities, show_back=True)
 
         # Update state
-        await state.update_data(cached_download_id=cached_download.id)
+        await state.update_data(cached_download_id=cached_id)
         await state.set_state(DownloadStates.selecting_cached_file)
 
         await query.message.edit_text(caption, reply_markup=kb, parse_mode="Markdown")
@@ -262,7 +272,7 @@ async def show_cached_qualities(
 
 @router.callback_query(F.data.startswith("send_cached:"))
 async def send_cached_file(
-    query: CallbackQuery, state: FSMContext, session: AsyncSession, bot: Bot
+    query: CallbackQuery, state: FSMContext, bot: Bot
 ):
     """
     Handle quality selection: Send cached file by file_id instantly.
@@ -280,71 +290,76 @@ async def send_cached_file(
     await query.answer("⏳ در حال ارسال فایل از کش...")
 
     try:
-        repo = CachedDownloadRepository(session)
+        from database.connection import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            repo = CachedDownloadRepository(session)
 
-        # Get quality
-        quality = await repo.get_quality_by_id(quality_id)
-        if not quality:
-            await query.answer("❌ فایل کش شده یافت نشد", show_alert=True)
-            return
-
-        # Get parent download for caption
-        cached_download = await session.get(CachedDownload, quality.cache_id)
-
-        # Build caption
-        title = cached_download.title if cached_download else "فایل کش شده"
-        size_text = f"{quality.file_size_mb:.1f} MB" if quality.file_size else ""
-        caption = (
-            f"📦 **{title[:80]}**\n"
-            f"🎯 کیفیت: {quality.quality_label}\n"
-            f"📊 فرمت: {quality.extension or 'نامعلوم'}\n"
-            f"{'📦 حجم: ' + size_text if size_text else ''}\n"
-            f"⚡ **ارسال سریع از کش** (کمتر از 1 ثانیه)"
-        )
-
-        # Send via file_id
-        try:
-            mime = quality.mime_type or ''
-            if 'video' in mime:
-                await bot.send_video(
-                    chat_id=query.from_user.id,
-                    video=quality.telegram_file_id,
-                    caption=caption,
-                    parse_mode="Markdown"
-                )
-            elif 'audio' in mime:
-                await bot.send_audio(
-                    chat_id=query.from_user.id,
-                    audio=quality.telegram_file_id,
-                    caption=caption,
-                    parse_mode="Markdown"
-                )
-            else:
-                await bot.send_document(
-                    chat_id=query.from_user.id,
-                    document=quality.telegram_file_id,
-                    caption=caption,
-                    parse_mode="Markdown"
-                )
-        except Exception as send_error:
-            error_msg = str(send_error)
-            logger.warning(f"[PRO CACHE] Send failed (file_id possibly expired): {error_msg}")
-
-            # Mark as invalid if file_id expired
-            if "FILE_ID_INVALID" in error_msg or "file_id" in error_msg.lower():
-                await repo.mark_invalid(quality.cache_id)
-                await query.message.edit_text(
-                    "⚠️ **فایل کش منقضی شده است**\n\n"
-                    "فایل‌های تلگرام پس از مدتی منقضی می‌شوند.\n"
-                    "لطفاً از گزینه «پیدا کردن کیفیت‌های جدید» استفاده کنید.",
-                    parse_mode="Markdown"
-                )
-                await query.answer("⚠️ فایل کش منقضی شده", show_alert=True)
+            # Get quality
+            quality = await repo.get_quality_by_id(quality_id)
+            if not quality:
+                await query.answer("❌ فایل کش شده یافت نشد", show_alert=True)
                 return
-            raise
 
-        # Mark as used (update stats)
-        await repo.mark_used(quality.cache_id, quality_id)
+            # Get parent download for caption
+            cached_download = await session.get(CachedDownload, quality.cache_id)
+
+            # Build caption
+            title = cached_download.title if cached_download else "فایل کش شده"
+            size_text = f"{quality.file_size_mb:.1f} MB" if quality.file_size else ""
+            caption = (
+                f"📦 **{title[:80]}**\n"
+                f"🎯 کیفیت: {quality.quality_label}\n"
+                f"📊 فرمت: {quality.extension or 'نامعلوم'}\n"
+                f"{'📦 حجم: ' + size_text if size_text else ''}\n"
+                f"⚡ **ارسال سریع از کش** (کمتر از 1 ثانیه)"
+            )
+
+            telegram_file_id = quality.telegram_file_id
+            mime = quality.mime_type or ''
+            cache_id = quality.cache_id
+
+            # Send via file_id
+            try:
+                if 'video' in mime:
+                    await bot.send_video(
+                        chat_id=query.from_user.id,
+                        video=telegram_file_id,
+                        caption=caption,
+                        parse_mode="Markdown"
+                    )
+                elif 'audio' in mime:
+                    await bot.send_audio(
+                        chat_id=query.from_user.id,
+                        audio=telegram_file_id,
+                        caption=caption,
+                        parse_mode="Markdown"
+                    )
+                else:
+                    await bot.send_document(
+                        chat_id=query.from_user.id,
+                        document=telegram_file_id,
+                        caption=caption,
+                        parse_mode="Markdown"
+                    )
+            except Exception as send_error:
+                error_msg = str(send_error)
+                logger.warning(f"[PRO CACHE] Send failed (file_id possibly expired): {error_msg}")
+
+                # Mark as invalid if file_id expired
+                if "FILE_ID_INVALID" in error_msg or "file_id" in error_msg.lower():
+                    await repo.mark_invalid(cache_id)
+                    await query.message.edit_text(
+                        "⚠️ **فایل کش منقضی شده است**\n\n"
+                        "فایل‌های تلگرام پس از مدتی منقضی می‌شوند.\n"
+                        "لطفاً از گزینه «پیدا کردن کیفیت‌های جدید» استفاده کنید.",
+                        parse_mode="Markdown"
+                    )
+                    await query.answer("⚠️ فایل کش منقضی شده", show_alert=True)
+                    return
+                raise
+
+            # Mark as used (update stats)
+            await repo.mark_used(cache_id, quality_id)
 
         # Delete the selection message
         try:
@@ -361,7 +376,7 @@ async def send_cached_file(
 
 
 @router.callback_query(F.data.startswith("download_new:"))
-async def download_new_callback(query: CallbackQuery, state: FSMContext, session: AsyncSession):
+async def download_new_callback(query: CallbackQuery, state: FSMContext):
     """
     Handle 🔄 button: Start fresh download for new qualities.
     Moves user to format selection flow.
@@ -376,10 +391,12 @@ async def download_new_callback(query: CallbackQuery, state: FSMContext, session
         try:
             _, param = query.data.split(":", 1)
             if param.isdigit():
-                repo = CachedDownloadRepository(session)
-                cached = await repo.get_by_id(int(param))
-                if cached:
-                    url = cached.original_url
+                from database.connection import AsyncSessionLocal
+                async with AsyncSessionLocal() as session:
+                    repo = CachedDownloadRepository(session)
+                    cached = await repo.get_by_id(int(param))
+                    if cached:
+                        url = cached.original_url
         except Exception:
             pass
 
@@ -424,7 +441,7 @@ async def download_new_callback(query: CallbackQuery, state: FSMContext, session
 
 
 @router.callback_query(F.data == "back_to_cache_options")
-async def back_to_cache_options(query: CallbackQuery, state: FSMContext, session: AsyncSession):
+async def back_to_cache_options(query: CallbackQuery, state: FSMContext):
     """
     Handle ◀️ back button from quality list → return to 3-button options.
     """
@@ -436,26 +453,31 @@ async def back_to_cache_options(query: CallbackQuery, state: FSMContext, session
         return
 
     try:
-        repo = CachedDownloadRepository(session)
-        cached_download = await repo.get_by_id(cached_download_id)
+        from database.connection import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            repo = CachedDownloadRepository(session)
+            cached_download = await repo.get_by_id(cached_download_id)
 
-        if not cached_download or not cached_download.qualities:
-            await query.answer("❌ اطلاعات کش یافت نشد", show_alert=True)
-            return
+            if not cached_download or not cached_download.qualities:
+                await query.answer("❌ اطلاعات کش یافت نشد", show_alert=True)
+                return
 
-        quality_count = len(cached_download.qualities)
-        kb = get_cache_options_keyboard(quality_count, cached_download.id)
+            quality_count = len(cached_download.qualities)
+            kb = get_cache_options_keyboard(quality_count, cached_download.id)
+            title = cached_download.title or "بدون عنوان"
+            duration = cached_download.duration
+            access_count = cached_download.access_count
+
         await state.set_state(DownloadStates.viewing_cached_files)
 
-        title = cached_download.title or "بدون عنوان"
         title_preview = title[:80] + "..." if len(title) > 80 else title
         duration_text = ""
-        if cached_download.duration:
-            mins = cached_download.duration // 60
-            secs = cached_download.duration % 60
+        if duration:
+            mins = duration // 60
+            secs = duration % 60
             duration_text = f"\n⏱ مدت: {mins}:{secs:02d}"
 
-        access_text = f"\n📊 تعداد دریافت: {cached_download.access_count} بار"
+        access_text = f"\n📊 تعداد دریافت: {access_count} بار"
 
         await query.message.edit_text(
             f"✅ **این محتوا قبلاً دانلود شده!**\n\n"
@@ -521,7 +543,7 @@ async def fresh_search_callback(query: CallbackQuery, state: FSMContext):
     F.data.startswith("use_cached:")
 )
 async def use_cached_file_legacy(
-    query: CallbackQuery, state: FSMContext, session: AsyncSession, bot: Bot
+    query: CallbackQuery, state: FSMContext, bot: Bot
 ):
     """
     Legacy handler: Send a previously cached Telegram file_id.
@@ -531,28 +553,30 @@ async def use_cached_file_legacy(
         _, id_str = query.data.split(":", 1)
         quality_id = int(id_str)
 
-        # Try to load as CachedQuality first (new format)
-        quality = await session.get(CachedQuality, quality_id)
-        if quality:
-            # Use the new send logic by redirecting callback data
-            query.data = f"send_cached:{quality_id}"
-            await send_cached_file(query, state, session, bot)
-            return
+        from database.connection import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            # Try to load as CachedQuality first (new format)
+            quality = await session.get(CachedQuality, quality_id)
+            if quality:
+                # Use the new send logic by redirecting callback data
+                query.data = f"send_cached:{quality_id}"
+                await send_cached_file(query, state, bot)
+                return
 
-        # Fallback: try as old CachedDownload
-        cd = await session.get(CachedDownload, quality_id)
-        if not cd or not cd.qualities:
-            await query.answer("❌ فایل کش‌شده پیدا نشد", show_alert=True)
-            return
+            # Fallback: try as old CachedDownload
+            cd = await session.get(CachedDownload, quality_id)
+            if not cd or not cd.qualities:
+                await query.answer("❌ فایل کش‌شده پیدا نشد", show_alert=True)
+                return
 
-        # Send first available quality
-        first_quality = cd.qualities[0] if cd.qualities else None
-        if not first_quality:
-            await query.answer("❌ کیفیتی یافت نشد", show_alert=True)
-            return
+            # Send first available quality
+            first_quality = cd.qualities[0] if cd.qualities else None
+            if not first_quality:
+                await query.answer("❌ کیفیتی یافت نشد", show_alert=True)
+                return
 
-        query.data = f"send_cached:{first_quality.id}"
-        await send_cached_file(query, state, session, bot)
+            query.data = f"send_cached:{first_quality.id}"
+            await send_cached_file(query, state, bot)
 
     except Exception as e:
         logger.exception(f"[LEGACY CACHE] Error: {e}")

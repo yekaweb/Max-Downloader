@@ -363,8 +363,10 @@ async def cmd_ig_login(message: Message, **kwargs):
 
 # ─── File Upload: دریافت و اعمال مستقیم فایل cookies.txt / JSON ──────────────────
 
+from aiogram import Bot
+
 @router.message(F.document)
-async def handle_admin_cookie_file_upload(message: Message, bot: Message.bot):
+async def handle_admin_cookie_file_upload(message: Message, bot: Bot):
     """دریافت مستقیم فایل کوکی (cookies.txt یا فایل json) ارسالی توسط ادمین"""
     if message.from_user.id not in settings.ADMIN_IDS_LIST:
         return

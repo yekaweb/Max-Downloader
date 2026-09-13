@@ -128,9 +128,23 @@ class SubscriptionService:
         )
         self.db.add(tx)
         
-        # Activate subscription
-        await self.activate_subscription(user_id, plan_id, duration_days)
-        
         return True, "اشتراک شما با موفقیت از طریق سکه فعال شد!"
+
+    async def record_download(self, user_id: int, file_size: int = 0, platform: str = "instagram"):
+        """Record a completed download in the database for tracking daily limits."""
+        from database.models import Download
+        try:
+            download = Download(
+                user_id=user_id,
+                file_size=file_size,
+                status="completed",
+                platform=platform,
+            )
+            self.db.add(download)
+            await self.db.commit()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to record download in SubscriptionService: {e}")
+
 
 __all__ = ["SubscriptionService"]

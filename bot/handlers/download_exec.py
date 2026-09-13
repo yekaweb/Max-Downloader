@@ -489,7 +489,7 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
                                 await message.reply_video(video=q.telegram_file_id, caption=c_text, parse_mode="HTML", reply_markup=builder.as_markup(), supports_streaming=True)
                             
                             # Record download usage
-                            await sub_service.record_download(user_id)
+                            await sub_service.record_download(user_id=user_id, file_size=15 * 1024 * 1024, platform="instagram")
                             clear_session(user_id)
                             await state.clear()
                             return
@@ -525,7 +525,10 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
         full_caption = (caption_raw[:850] + footer) if caption_raw else f"📹 Instagram ({shortcode}){footer}"
 
         builder = InlineKeyboardBuilder()
+        if items and items[0].get("url") and items[0]["url"].startswith("http"):
+            builder.button(text="🔗 لینک دانلود مستقیم (CDN)", url=items[0]["url"])
         builder.button(text="🎵 استخراج صوت (MP3)", callback_data=f"ig_audio:{shortcode}")
+        builder.adjust(1)
         kb = builder.as_markup()
 
         sent_msg = None
@@ -599,7 +602,8 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
                 sent_msg = await message.reply_photo(
                     photo=p_url,
                     caption=full_caption,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=kb
                 )
             except Exception as direct_photo_err:
                 import logging
@@ -612,7 +616,8 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
                     sent_msg = await message.reply_photo(
                         photo=FSInputFile(temp_file),
                         caption=full_caption,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        reply_markup=kb
                     )
                 finally:
                     if temp_file.exists():
@@ -624,7 +629,7 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
         # 5. Record download usage & Write Pro Cache
         async with AsyncSessionLocal() as db_session:
             sub_service = SubscriptionService(db_session)
-            await sub_service.record_download(user_id)
+            await sub_service.record_download(user_id=user_id, file_size=15 * 1024 * 1024, platform="instagram")
 
             if sent_msg and u_hash:
                 f_id = None

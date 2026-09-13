@@ -190,13 +190,14 @@ class InstagramService:
             clean_url = f"https://{clean_url}"
 
         shortcode = self.extract_shortcode(clean_url) or "media"
+        is_reel = "/reel/" in clean_url or "/reels/" in clean_url or "/tv/" in clean_url
 
         # ----------------------------------------------------
         # TIER 1: Direct Embed Scraper (Zero Auth, ~300ms)
         # ----------------------------------------------------
         try:
             logger.info(f"[InstagramService] Attempting Tier 1 (Direct Embed) for {clean_url}")
-            res_embed = await self._resolve_via_embed(clean_url, shortcode)
+            res_embed = await self._resolve_via_embed(clean_url, shortcode, is_reel)
             if res_embed and res_embed.get("success"):
                 logger.info(f"[InstagramService] Tier 1 succeeded for {shortcode}")
                 return res_embed
@@ -204,40 +205,52 @@ class InstagramService:
             logger.debug(f"[InstagramService] Tier 1 failed: {e}")
 
         # ----------------------------------------------------
-        # TIER 2: Cobalt Multi-Instance Engine (~800ms)
+        # TIER 2: Direct GraphQL / Web Info (X-IG-App-ID)
         # ----------------------------------------------------
         try:
-            logger.info(f"[InstagramService] Attempting Tier 2 (Cobalt API) for {clean_url}")
-            res_cobalt = await self._resolve_via_cobalt(clean_url, shortcode)
-            if res_cobalt and res_cobalt.get("success"):
+            logger.info(f"[InstagramService] Attempting Tier 2 (Web Info API) for {clean_url}")
+            res_web = await self._resolve_via_web_info(clean_url, shortcode)
+            if res_web and res_web.get("success"):
                 logger.info(f"[InstagramService] Tier 2 succeeded for {shortcode}")
-                return res_cobalt
+                return res_web
         except Exception as e:
             logger.debug(f"[InstagramService] Tier 2 failed: {e}")
 
         # ----------------------------------------------------
-        # TIER 3: Rapid Public Scraper APIs (~1.2s)
+        # TIER 3: Cobalt Multi-Instance Engine (~800ms)
         # ----------------------------------------------------
         try:
-            logger.info(f"[InstagramService] Attempting Tier 3 (Public Scrapers) for {clean_url}")
-            res_scraper = await self._resolve_via_public_scrapers(clean_url, shortcode)
-            if res_scraper and res_scraper.get("success"):
+            logger.info(f"[InstagramService] Attempting Tier 3 (Cobalt API) for {clean_url}")
+            res_cobalt = await self._resolve_via_cobalt(clean_url, shortcode)
+            if res_cobalt and res_cobalt.get("success"):
                 logger.info(f"[InstagramService] Tier 3 succeeded for {shortcode}")
-                return res_scraper
+                return res_cobalt
         except Exception as e:
             logger.debug(f"[InstagramService] Tier 3 failed: {e}")
 
         # ----------------------------------------------------
-        # TIER 4: Fallback to yt-dlp / Instagrapi
+        # TIER 4: Rapid Public Scraper APIs (~1.2s)
         # ----------------------------------------------------
         try:
-            logger.info(f"[InstagramService] Attempting Tier 4 (yt-dlp/Instagrapi) for {clean_url}")
+            logger.info(f"[InstagramService] Attempting Tier 4 (Public Scrapers) for {clean_url}")
+            res_scraper = await self._resolve_via_public_scrapers(clean_url, shortcode)
+            if res_scraper and res_scraper.get("success"):
+                logger.info(f"[InstagramService] Tier 4 succeeded for {shortcode}")
+                return res_scraper
+        except Exception as e:
+            logger.debug(f"[InstagramService] Tier 4 failed: {e}")
+
+        # ----------------------------------------------------
+        # TIER 5: Fallback to yt-dlp / Instagrapi
+        # ----------------------------------------------------
+        try:
+            logger.info(f"[InstagramService] Attempting Tier 5 (yt-dlp/Instagrapi) for {clean_url}")
             res_native = await self._resolve_via_ytdlp_or_instagrapi(clean_url, shortcode)
             if res_native and res_native.get("success"):
-                logger.info(f"[InstagramService] Tier 4 succeeded for {shortcode}")
+                logger.info(f"[InstagramService] Tier 5 succeeded for {shortcode}")
                 return res_native
         except Exception as e:
-            logger.error(f"[InstagramService] Tier 4 failed: {e}")
+            logger.error(f"[InstagramService] Tier 5 failed: {e}")
 
         return {
             "success": False,
@@ -245,7 +258,7 @@ class InstagramService:
             "message": "متاسفانه دریافت محتوا امکان‌پذیر نشد. در صورت خصوصی بودن پیج، نیاز به اتصال اکانت در ربات می‌باشد.",
         }
 
-    async def _resolve_via_embed(self, url: str, shortcode: str) -> Optional[Dict[str, Any]]:
+    async def _resolve_via_embed(self, url: str, shortcode: str, is_reel: bool = False) -> Optional[Dict[str, Any]]:
         """
         Tier 1: Scrape Instagram's public embed page without authentication.
         """
@@ -280,7 +293,15 @@ class InstagramService:
                 if clean_v.startswith("http") and clean_v not in video_urls:
                     video_urls.append(clean_v)
 
-        # 2. Search for images if no video or as carousel fallback
+        # Pattern 3: video tag src or dash manifest
+        if not video_urls:
+            v_src = re.findall(r'<video[^>]+src="([^"]+)"', text)
+            for vs in v_src:
+                clean_v = html.unescape(vs.replace("&amp;", "&"))
+                if clean_v.startswith("http") and clean_v not in video_urls:
+                    video_urls.append(clean_v)
+
+        # 2. Search for images
         photo_urls = []
         p_matches = re.findall(r'"display_url":"([^"]+)"', text)
         for pm in p_matches:
@@ -302,6 +323,9 @@ class InstagramService:
             raw_caption = re.sub(r"<[^>]+>", "", c_match.group(1))
             caption = html.unescape(raw_caption).strip()
 
+        # Check if page indicates it's a video (even if video_urls was empty)
+        has_video_indicator = is_reel or "EmbeddedMediaVideo" in text or "video_play" in text or "has_audio" in text or '"is_video":true' in text
+
         if video_urls:
             items = [{"type": "video", "url": v, "thumbnail": photo_urls[0] if photo_urls else None} for v in video_urls]
             return {
@@ -314,7 +338,8 @@ class InstagramService:
                 "items": items,
                 "engine": "Direct Embed (Zero-Auth)",
             }
-        elif photo_urls:
+        elif photo_urls and not has_video_indicator:
+            # ONLY return photo if it's genuinely NOT a reel or video post
             items = [{"type": "photo", "url": p} for p in photo_urls]
             return {
                 "success": True,
@@ -326,6 +351,72 @@ class InstagramService:
                 "items": items,
                 "engine": "Direct Embed (Zero-Auth)",
             }
+
+        # If it was a video but embed couldn't extract direct mp4, return None to proceed to Cobalt / Web API!
+        return None
+
+    async def _resolve_via_web_info(self, url: str, shortcode: str) -> Optional[Dict[str, Any]]:
+        """
+        Tier 2: Instagram Public Web API with X-IG-App-ID header.
+        """
+        endpoints = [
+            f"https://www.instagram.com/p/{shortcode}/?__a=1&__d=dis",
+            f"https://www.instagram.com/reel/{shortcode}/?__a=1&__d=dis",
+        ]
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "X-IG-App-ID": "936619743392459",
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+
+        timeout = aiohttp.ClientTimeout(total=8)
+        for ep in endpoints:
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(ep, headers=headers) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            items_data = data.get("items") or []
+                            if items_data:
+                                item = items_data[0]
+                                video_versions = item.get("video_versions") or []
+                                if video_versions:
+                                    best_video = video_versions[0].get("url")
+                                    caption_dict = item.get("caption") or {}
+                                    caption_text = caption_dict.get("text", "")
+                                    return {
+                                        "success": True,
+                                        "platform": "instagram",
+                                        "shortcode": shortcode,
+                                        "title": f"Instagram Reel ({shortcode})",
+                                        "caption": caption_text,
+                                        "is_album": False,
+                                        "items": [{"type": "video", "url": best_video}],
+                                        "engine": "Instagram Web Client (Direct CDN)",
+                                    }
+                            
+                            # GraphQL structure fallback
+                            graphql = data.get("graphql", {}).get("shortcode_media")
+                            if graphql:
+                                is_vid = graphql.get("is_video")
+                                v_url = graphql.get("video_url")
+                                if is_vid and v_url:
+                                    c_edges = graphql.get("edge_media_to_caption", {}).get("edges", [])
+                                    caption_text = c_edges[0].get("node", {}).get("text", "") if c_edges else ""
+                                    return {
+                                        "success": True,
+                                        "platform": "instagram",
+                                        "shortcode": shortcode,
+                                        "title": f"Instagram Reel ({shortcode})",
+                                        "caption": caption_text,
+                                        "is_album": False,
+                                        "items": [{"type": "video", "url": v_url}],
+                                        "engine": "Instagram GraphQL (Direct CDN)",
+                                    }
+            except Exception as e:
+                logger.debug(f"[WebInfo] Endpoint {ep} error: {e}")
+                continue
 
         return None
 

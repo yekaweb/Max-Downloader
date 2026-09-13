@@ -27,6 +27,8 @@ def _build_ydl_opts(extra: dict = None) -> dict:
         'socket_timeout': 30,
         'cachedir': cache_dir,
         'cookiefile': str(COOKIES_FILE) if COOKIES_FILE.is_file() else None,
+        'js_runtimes': {'node': {}},
+        'remote_components': ['ejs:github'],
         # Rotate clients to mimic real users and bypass blocks
         'extractor_args': {
             'youtube': {

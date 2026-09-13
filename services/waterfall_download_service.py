@@ -26,6 +26,8 @@ _BASE_YTDLP_CONFIG = {
     'socket_timeout': 30,
     'noplaylist': True,
     'cookiefile': str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
+    'js_runtimes': {'node': {}},
+    'remote_components': ['ejs:github'],
     'extractor_args': {
         'youtube': {
             'player_client': ['all'],

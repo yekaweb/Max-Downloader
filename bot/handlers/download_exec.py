@@ -24,6 +24,8 @@ _BASE_YDL_OPTS = {
     'socket_timeout': 30,
     'noplaylist': True,
     'cookiefile': str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
+    'js_runtimes': {'node': {}},
+    'remote_components': ['ejs:github'],
     'extractor_args': {
         'youtube': {
             'player_client': ['all'],
@@ -72,9 +74,10 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         limits = await sub_service.check_user_limits(user_id)
         max_file_size = limits.get("max_file_size")
 
+    media_title = session_data.get("format_info", {}).get("title") or "در حال آماده‌سازی..."
     progress_msg = await message.answer(
         generate_progress_message(
-            title="جاری سازی دانلود...",
+            title=media_title,
             progress_percent=0,
             downloaded_mb=0,
             total_mb=1,
@@ -132,17 +135,20 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 ydl_opts["format"] = (
                     f"bestvideo[height<={height}][vcodec*=avc]+{audio_sel}[ext=m4a]"
                     f"/bestvideo[height<={height}][ext=mp4]+{audio_sel}"
+                    f"/bestvideo[height<={height}]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
             elif codec == "av1":
                 ydl_opts["format"] = (
                     f"bestvideo[height<={height}][vcodec^=av01]+{audio_sel}"
+                    f"/bestvideo[height<={height}]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
             elif codec == "vp9":
                 ydl_opts["format"] = (
                     f"bestvideo[height<={height}][vcodec^=vp09]+{audio_sel}"
                     f"/bestvideo[height<={height}][vcodec^=vp9]+{audio_sel}"
+                    f"/bestvideo[height<={height}]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
             else:
@@ -173,19 +179,19 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         
         from utils.progress import update_progress_message
 
-        async def yt_dlp_progress_callback(percent, dl_mb, tot_mb, speed, eta):
+        async def yt_dlp_progress_callback(percent, dl_mb, tot_mb, speed, eta, phase="download"):
             await update_progress_message(
                 message=message,
                 user_id=user_id,
                 chat_id=message.chat.id,
                 message_id=progress_msg.message_id,
-                title=f"{url[:20]}...",
+                title=media_title,
                 progress_percent=percent,
                 downloaded_mb=dl_mb,
                 total_mb=tot_mb,
                 speed_mbps=speed,
                 eta_seconds=eta,
-                phase="download"
+                phase=phase
             )
 
         def progress_hook(d):
@@ -206,7 +212,15 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                     speed_mbps = speed_bytes / (1024 * 1024)
 
                     asyncio.run_coroutine_threadsafe(
-                        yt_dlp_progress_callback(percent, dl_mb, tot_mb, speed_mbps, eta_sec),
+                        yt_dlp_progress_callback(percent, dl_mb, tot_mb, speed_mbps, eta_sec, "download"),
+                        loop
+                    )
+                except Exception:
+                    pass
+            elif d['status'] == 'finished':
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        yt_dlp_progress_callback(100.0, 0, 0, 0, 0, "processing"),
                         loop
                     )
                 except Exception:
@@ -361,12 +375,21 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             error_text = "❌ محتوا پیدا نشد یا حذف شده است."
         elif "geo-restricted" in msg or "country" in msg:
             error_text = "❌ این محتوا در سرور فعلی محدودیت منطقه‌ای دارد."
+        elif "403" in msg or "forbidden" in msg:
+            error_text = "❌ یوتیوب موقتاً دسترسی مستقیم به این کیفیت را محدود کرد. لطفاً کیفیت دیگری را امتحان کنید."
         else:
             error_text = f"❌ خطا در دریافت مدیا:\n{str(e)[:200]}"
-        await message.answer(error_text)
+        try:
+            await progress_msg.edit_text(error_text, parse_mode="HTML")
+        except Exception:
+            await message.answer(error_text, parse_mode="HTML")
         
     except FileNotFoundError:
-        await message.answer("❌ فایل پس از دانلود پیدا نشد. ممکن است دانلود ناقص بوده باشد.")
+        error_text = "❌ فایل پس از دانلود پیدا نشد. ممکن است دانلود ناقص بوده باشد."
+        try:
+            await progress_msg.edit_text(error_text, parse_mode="HTML")
+        except Exception:
+            await message.answer(error_text, parse_mode="HTML")
         
     except Exception as exc:
         import traceback
@@ -374,15 +397,18 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         logger = getattr(bot.loader, "logger", None)
         if logger:
             logger.error(f"Download Error: {exc}\n{traceback.format_exc()}")
-        await message.answer(
-            f"❌ خطای سیستمی رخ داد:\n{str(exc)[:200]}"
-        )
+        error_text = f"❌ خطای سیستمی رخ داد:\n{str(exc)[:200]}"
+        try:
+            await progress_msg.edit_text(error_text, parse_mode="HTML")
+        except Exception:
+            await message.answer(error_text, parse_mode="HTML")
 
     finally:
-        try:
-            await progress_msg.delete()
-        except Exception:
-            pass
+        if sent_msg:
+            try:
+                await progress_msg.delete()
+            except Exception:
+                pass
 
         if filename:
             try:

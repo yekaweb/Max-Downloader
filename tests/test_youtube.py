@@ -1,20 +1,28 @@
+import pytest
 import yt_dlp
-import sys
+from pathlib import Path
 
-opts = {
-    'quiet': False,
-    'cookiefile': '/app/cookies.txt',
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['web', 'android', 'ios'],
-        }
+COOKIE_FILE = Path("/root/Max-Downloader/cookies.txt")
+
+def test_youtube_extraction():
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'cookiefile': str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
+        'js_runtimes': {'node': {}},
+        'remote_components': ['ejs:github'],
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['all'],
+                'lang': ['en', 'fa'],
+            }
+        },
+        'skip_download': True,
     }
-}
-
-print("Testing YouTube extraction with your cookies.txt...")
-try:
+    
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info('https://www.youtube.com/watch?v=BaW_jenozKc', download=False)
-        print(f"\n✅ SUCCESS! Found {len(info.get('formats', []))} formats.")
-except Exception as e:
-    print(f"\n❌ FAILED! YouTube rejected the request: {e}")
+        info = ydl.extract_info('https://www.youtube.com/watch?v=dQw4w9WgXcQ', download=False)
+        assert info is not None
+        assert 'formats' in info
+        assert len(info['formats']) > 0
+

@@ -103,7 +103,7 @@ async def handle_back_prev(callback: CallbackQuery):
 
 @router.message(DownloadStates.waiting_for_url)
 async def handle_url_submission(message: Message, state: FSMContext):
-    """Validate the user URL and advance to format selection."""
+    """Validate the user URL and advance to format selection or instant Instagram download."""
     url = (message.text or "").strip()
 
     if not is_valid_url(url):
@@ -112,6 +112,14 @@ async def handle_url_submission(message: Message, state: FSMContext):
             "لطفاً یک لینک معتبر شامل http:// یا https:// ارسال کنید.",
             parse_mode="HTML",
         )
+        return
+
+    from services.instagram_service import instagram_service
+    from bot.handlers.download_exec import handle_instant_instagram_download
+
+    # Check for Instant Instagram Downloader Flow
+    if instagram_service.is_instagram_url(url):
+        await handle_instant_instagram_download(message, url, state)
         return
 
     session_data = get_session(message.from_user.id)
@@ -125,13 +133,8 @@ async def handle_url_submission(message: Message, state: FSMContext):
     # Send loading message
     loading_msg = await message.answer("🔄 <b>در حال دریافت اطلاعات ویدیو...</b>", parse_mode="HTML")
     
-    from services.instagram_service import instagram_service
     from utils.format_sizes import get_exact_format_sizes
-
-    if instagram_service.is_instagram_url(url):
-        format_info = await instagram_service.get_media_info(url)
-    else:
-        format_info = await get_exact_format_sizes(url)
+    format_info = await get_exact_format_sizes(url)
 
     # Delete loading message
     try:
@@ -140,23 +143,12 @@ async def handle_url_submission(message: Message, state: FSMContext):
         pass
         
     if "error" in format_info:
-        if format_info.get("error") == "LOGIN_REQUIRED":
-            await message.reply(
-                "⚠️ <b>دانلود از اینستاگرام نیازمند فعال‌سازی کوکی است</b>\n\n"
-                "سرورهای اینستاگرام به دلیل محدودیت آی‌پی دیتاسنتر نیاز به یک سشن معتبر دارند.\n\n"
-                "🔑 <b>راهنمای ادمین ربات:</b>\n"
-                "برای فعال‌سازی دانلود، دستور زیر را ارسال کنید:\n"
-                "<code>/set_ig_cookie your_session_id</code>\n\n"
-                "💡 <i>نکته: مقدار sessionid را می‌توانید از بخش Inspect &gt; Application &gt; Cookies مرورگر کپی نمایید.</i>",
-                parse_mode="HTML",
-            )
-        else:
-            await message.reply(
-                f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
-                f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
-                f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
-                parse_mode="HTML",
-            )
+        await message.reply(
+            f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
+            f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
+            f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
+            parse_mode="HTML",
+        )
         clear_session(message.from_user.id)
         await state.clear()
         return
@@ -172,6 +164,14 @@ async def handle_url_submission(message: Message, state: FSMContext):
         reply_markup=get_format_type_keyboard(),
         parse_mode="HTML",
     )
+
+
+@router.message(F.text.regexp(r"(https?://)?(www\.)?(instagram\.com|insta\.io)/(p|reel|tv|stories|reels)/[A-Za-z0-9\-_]+"))
+async def handle_direct_instagram_link(message: Message, state: FSMContext):
+    """Handle direct Instagram URLs sent as regular messages without prior command."""
+    url = (message.text or "").strip()
+    from bot.handlers.download_exec import handle_instant_instagram_download
+    await handle_instant_instagram_download(message, url, state)
 
 
 @router.callback_query(F.data == "cancel_download")

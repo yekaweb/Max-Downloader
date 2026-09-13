@@ -68,6 +68,12 @@ def test_instagram_service_detection_and_session(tmp_path, monkeypatch):
     assert service.is_instagram_url("https://instagram.com/p/C123456/")
     assert not service.is_instagram_url("https://www.youtube.com/watch?v=12345")
     
+    # Test shortcode extraction
+    assert service.extract_shortcode("https://www.instagram.com/p/DdNM4okJi4P/") == "DdNM4okJi4P"
+    assert service.extract_shortcode("https://instagram.com/reel/C8q8q12345/?igsh=MW...") == "C8q8q12345"
+    assert service.extract_shortcode("https://www.instagram.com/reels/DA123456789") == "DA123456789"
+    assert service.extract_shortcode("https://youtube.com/watch?v=123") is None
+    
     # Test session setup
     session_file = tmp_path / "instagram_session.json"
     cookie_file = tmp_path / "cookies.txt"
@@ -80,4 +86,22 @@ def test_instagram_service_detection_and_session(tmp_path, monkeypatch):
     content = cookie_file.read_text()
     assert "test_session_id_999" in content
     assert "instagram.com" in content
+
+
+@pytest.mark.asyncio
+async def test_instagram_service_resolve_structure():
+    from services.instagram_service import instagram_service
+    res = await instagram_service.resolve_media("https://www.instagram.com/p/DdNM4okJi4P/")
+    assert isinstance(res, dict)
+    assert "success" in res
+
+
+@pytest.mark.asyncio
+async def test_instagram_backward_compatibility():
+    from services.instagram_service import instagram_service
+    info = await instagram_service.get_media_info("https://www.instagram.com/p/DdNM4okJi4P/")
+    assert isinstance(info, dict)
+    if "error" not in info:
+        assert info.get("platform") == "instagram"
+
 

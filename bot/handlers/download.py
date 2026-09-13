@@ -164,6 +164,12 @@ async def handle_url(message: types.Message, state: FSMContext):
         handler_name=handler.__class__.__name__,
     )
 
+    from services.instagram_service import instagram_service
+    if platform == "instagram" or instagram_service.is_instagram_url(text):
+        from bot.handlers.download_exec import handle_instant_instagram_download
+        await handle_instant_instagram_download(message, text, state)
+        return
+
     # NEW PIPELINE INTEGRATION
     user_id = message.from_user.id
     session_data = get_session(user_id)
@@ -175,12 +181,7 @@ async def handle_url(message: types.Message, state: FSMContext):
     session_data["send_as"] = None
 
     loading_msg = await message.reply("🔄 <b>در حال دریافت اطلاعات ویدیو...</b>", parse_mode="HTML")
-    
-    from services.instagram_service import instagram_service
-    if platform == "instagram" or instagram_service.is_instagram_url(text):
-        format_info = await instagram_service.get_media_info(text)
-    else:
-        format_info = await get_exact_format_sizes(text)
+    format_info = await get_exact_format_sizes(text)
     
     try:
         await loading_msg.delete()
@@ -188,23 +189,12 @@ async def handle_url(message: types.Message, state: FSMContext):
         pass
 
     if "error" in format_info:
-        if format_info.get("error") == "LOGIN_REQUIRED":
-            await message.reply(
-                "⚠️ <b>دانلود از اینستاگرام نیازمند فعال‌سازی کوکی است</b>\n\n"
-                "سرورهای اینستاگرام به دلیل محدودیت آی‌پی دیتاسنتر نیاز به یک سشن معتبر دارند.\n\n"
-                "🔑 <b>راهنمای ادمین ربات:</b>\n"
-                "برای فعال‌سازی دانلود، دستور زیر را ارسال کنید:\n"
-                "<code>/set_ig_cookie your_session_id</code>\n\n"
-                "💡 <i>نکته: مقدار sessionid را می‌توانید از بخش Inspect &gt; Application &gt; Cookies مرورگر کپی نمایید.</i>",
-                parse_mode="HTML",
-            )
-        else:
-            await message.reply(
-                f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
-                f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
-                f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
-                parse_mode="HTML",
-            )
+        await message.reply(
+            f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
+            f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
+            f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
+            parse_mode="HTML",
+        )
         clear_session(user_id)
         await state.clear()
         return
@@ -597,6 +587,83 @@ async def use_cached_file_legacy(
     except Exception as e:
         logger.exception(f"[LEGACY CACHE] Error: {e}")
         await query.answer("❌ خطا داخلی", show_alert=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# INSTAGRAM AUDIO EXTRACTION CALLBACK HANDLER
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data.startswith("ig_audio:"))
+async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContext, bot: Bot):
+    """Handle 🎵 استخراج صوت (MP3) button for Instagram Reels/Posts."""
+    await query.answer("🔄 در حال استخراج و آماده‌سازی فایل صوتی...")
+    shortcode = query.data.split(":", 1)[1]
+    url = f"https://www.instagram.com/p/{shortcode}/"
+    
+    status_msg = await query.message.reply("🎵 <b>در حال استخراج صوت از ویدیوی اینستاگرام...</b>", parse_mode="HTML")
+    
+    import asyncio
+    from pathlib import Path
+    from aiogram.types import FSInputFile
+    from services.cobalt_service import cobalt_service
+    from services.instagram_service import instagram_service
+    
+    temp_dir = Path("temp_downloads")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_mp3 = temp_dir / f"ig_{shortcode}.mp3"
+    temp_mp4 = temp_dir / f"ig_{shortcode}_src.mp4"
+    
+    try:
+        # Tier 1: Try Cobalt audio extraction
+        cobalt_res = await cobalt_service.get_media_stream_url(url, audio_only=True)
+        if cobalt_res.get("success") and cobalt_res.get("url"):
+            await cobalt_service.download_file(cobalt_res["url"], temp_mp3)
+            if temp_mp3.exists() and temp_mp3.stat().st_size > 1000:
+                await query.message.reply_audio(
+                    audio=FSInputFile(temp_mp3),
+                    title=f"Instagram Audio ({shortcode})",
+                    performer="Instagram Audio",
+                    caption=f"🎵 فایل صوتی ریلز اینستاگرام ({shortcode})\n\n⚡ <i>@MaxDownloaderBot</i>",
+                    parse_mode="HTML"
+                )
+                await status_msg.delete()
+                return
+
+        # Tier 2: Direct resolution and ffmpeg extraction
+        res = await instagram_service.resolve_media(url)
+        if res.get("success") and res.get("items"):
+            v_url = res["items"][0]["url"]
+            await cobalt_service.download_file(v_url, temp_mp4)
+            if temp_mp4.exists():
+                # Convert to MP3 using ffmpeg
+                proc = await asyncio.create_subprocess_exec(
+                    "ffmpeg", "-y", "-i", str(temp_mp4), "-vn", "-c:a", "libmp3lame", "-b:a", "192k", str(temp_mp3),
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await proc.wait()
+                if temp_mp3.exists() and temp_mp3.stat().st_size > 1000:
+                    await query.message.reply_audio(
+                        audio=FSInputFile(temp_mp3),
+                        title=f"Instagram Audio ({shortcode})",
+                        performer="Instagram Audio",
+                        caption=f"🎵 فایل صوتی ریلز اینستاگرام ({shortcode})\n\n⚡ <i>@MaxDownloaderBot</i>",
+                        parse_mode="HTML"
+                    )
+                    await status_msg.delete()
+                    return
+
+        await status_msg.edit_text("❌ متاسفانه استخراج صوت از این ویدیو امکان‌پذیر نشد.", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"[InstagramAudio] Error: {e}", exc_info=True)
+        await status_msg.edit_text(f"❌ خطا در استخراج صوت: {str(e)[:100]}", parse_mode="HTML")
+    finally:
+        for f in [temp_mp3, temp_mp4]:
+            if f.exists():
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
 
 
 __all__ = ["router"]

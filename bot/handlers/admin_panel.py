@@ -307,14 +307,60 @@ async def cmd_ig_status(message: Message, **kwargs):
     has_session = instagram_service.has_active_session()
 
     if has_session:
-        await message.answer("✅ <b>سشن اینستاگرام فعال و تنظیم شده است.</b>", parse_mode="HTML")
+        await message.answer(
+            "✅ <b>سشن اینستاگرام فعال است!</b>\n\n"
+            "کوکی و سشن معتبر برای دانلود از اینستاگرام روی سرور تنظیم شده است.",
+            parse_mode="HTML"
+        )
     else:
         await message.answer(
-            "⚠️ <b>هیچ سشن یا کوکی فعالی برای اینستاگرام تنظیم نشده است.</b>\n\n"
-            "برای فعال‌سازی از دستور <code>/set_ig_cookie session_id</code> استفاده کنید.",
-            parse_mode="HTML",
+            "⚠️ <b>سشن اینستاگرام تنظیم نشده است!</b>\n\n"
+            "برای لینک‌های عمومی از موتور پرسرعت بدون لاگین استفاده می‌شود.\n"
+            "در صورت نیاز به فعال‌سازی سشن برای پیج‌های خصوصی:\n"
+            "<code>/ig_login username password</code> یا <code>/set_ig_cookie sessionid</code>",
+            parse_mode="HTML"
         )
 
 
+@router.message(Command("ig_login"))
+async def cmd_ig_login(message: Message, **kwargs):
+    """لاگین خودکار با نام کاربری و رمز عبور اینستاگرام توسط ادمین"""
+    if message.from_user.id not in settings.ADMIN_IDS_LIST:
+        await message.answer("❌ شما دسترسی ادمین ندارید.")
+        return
+
+    parts = message.text.split(maxsplit=3)
+    if len(parts) < 3:
+        await message.answer(
+            "⚠️ <b>فرمت دستور نامعتبر است!</b>\n\n"
+            "برای لاگین خودکار، مشخصات اکانت (ترجیحاً اکانت دوم/تستی) را ارسال کنید:\n"
+            "<code>/ig_login username password [2fa_code]</code>\n\n"
+            "💡 این دستور خودکار لاگین کرده و سشن را در سرور ذخیره می‌کند.",
+            parse_mode="HTML",
+        )
+        return
+
+    username = parts[1].strip()
+    password = parts[2].strip()
+    code = parts[3].strip() if len(parts) > 3 else None
+
+    loading = await message.answer("⏳ <b>در حال اتصال و لاگین به اینستاگرام...</b>", parse_mode="HTML")
+
+    from services.instagram_service import instagram_service
+    import asyncio
+    loop = asyncio.get_running_loop()
+    success, resp_msg = await loop.run_in_executor(
+        None, lambda: instagram_service.login_with_credentials(username, password, code)
+    )
+
+    try:
+        await loading.delete()
+    except Exception:
+        pass
+
+    await message.answer(resp_msg, parse_mode="HTML")
+
+
 __all__ = ["router", "admin_panel"]
+
 

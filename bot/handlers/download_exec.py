@@ -436,3 +436,238 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
 
         clear_session(user_id)
         await state.clear()
+
+
+async def handle_instant_instagram_download(message: Message, url: str, state: FSMContext):
+    """
+    Instant 1-Click Zero-Login Instagram Downloader Handler.
+    Bypasses redundant format selection menus and delivers direct media in 1-2 seconds.
+    Supports single reels, single photos, and multi-slide carousels (MediaGroups).
+    """
+    user_id = message.from_user.id
+    from database.connection import AsyncSessionLocal
+    from services.subscription_service import SubscriptionService
+    from services.instagram_service import instagram_service
+    from services.cobalt_service import cobalt_service
+    from services.hash_service import HashService
+    from database.repositories.cached_download_repo import CachedDownloadRepository
+    from aiogram.types import InputMediaPhoto, InputMediaVideo
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    # 1. Check user permission & subscription limits
+    async with AsyncSessionLocal() as db:
+        sub_service = SubscriptionService(db)
+        can_dl, error_msg = await sub_service.can_user_download(user_id)
+        if not can_dl:
+            await message.reply(f"❌ {error_msg}")
+            clear_session(user_id)
+            await state.clear()
+            return
+
+    # 2. Check Pro Cache (Instant 0.1s response for previously downloaded media)
+    hs = HashService()
+    u_info = hs.get_url_info(url)
+    u_hash = u_info.get("hash")
+
+    if u_hash:
+        async with AsyncSessionLocal() as db_session:
+            c_repo = CachedDownloadRepository(db_session)
+            cached = await c_repo.find_valid_by_url_hash(u_hash)
+            if cached and cached.qualities:
+                for q in cached.qualities:
+                    if q.telegram_file_id:
+                        try:
+                            # Send cached file directly
+                            shortcode = instagram_service.extract_shortcode(url) or "media"
+                            builder = InlineKeyboardBuilder()
+                            builder.button(text="🎵 استخراج صوت (MP3)", callback_data=f"ig_audio:{shortcode}")
+                            
+                            c_text = f"✅ دانلود سریع از حافظه کش (Lightning Cache)\n\n⚡ <i>ارسال شده توسط ربات</i>"
+                            if "image" in (q.file_type or ""):
+                                await message.reply_photo(photo=q.telegram_file_id, caption=c_text, parse_mode="HTML")
+                            else:
+                                await message.reply_video(video=q.telegram_file_id, caption=c_text, parse_mode="HTML", reply_markup=builder.as_markup(), supports_streaming=True)
+                            
+                            # Record download usage
+                            await sub_service.record_download(user_id)
+                            clear_session(user_id)
+                            await state.clear()
+                            return
+                        except Exception as cache_send_err:
+                            import logging
+                            logging.warning(f"Failed to send cached telegram_file_id: {cache_send_err}")
+                            break
+
+    # 3. Status Notification
+    status_msg = await message.reply("⚡ <b>در حال پردازش و دریافت رسانه از اینستاگرام...</b>", parse_mode="HTML")
+
+    try:
+        # 4. Resolve media through Next-Gen Waterfall Engine
+        res = await instagram_service.resolve_media(url)
+        if not res.get("success"):
+            err_msg = res.get("message", "متاسفانه امکان دریافت رسانه وجود ندارد.")
+            await status_msg.edit_text(f"❌ <b>خطا در دریافت از اینستاگرام</b>\n\n{err_msg}", parse_mode="HTML")
+            clear_session(user_id)
+            await state.clear()
+            return
+
+        items = res.get("items", [])
+        if not items:
+            await status_msg.edit_text("❌ محتوای قابل دانلودی در این لینک یافت نشد.", parse_mode="HTML")
+            clear_session(user_id)
+            await state.clear()
+            return
+
+        shortcode = res.get("shortcode") or instagram_service.extract_shortcode(url) or "media"
+        caption_raw = res.get("caption", "").strip()
+        engine_name = res.get("engine", "Fast CDN")
+        footer = f"\n\n⚡ <i>دانلود شده توسط @MaxDownloaderBot</i>"
+        full_caption = (caption_raw[:850] + footer) if caption_raw else f"📹 Instagram ({shortcode}){footer}"
+
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🎵 استخراج صوت (MP3)", callback_data=f"ig_audio:{shortcode}")
+        kb = builder.as_markup()
+
+        sent_msg = None
+
+        # ----------------------------------------------------
+        # CASE A: Multi-item Carousel / Album (MediaGroup)
+        # ----------------------------------------------------
+        if res.get("is_album") and len(items) > 1:
+            media_group = []
+            for idx, it in enumerate(items[:10]):  # Telegram limit is max 10 items per media group
+                c = full_caption if idx == 0 else None
+                m_url = it.get("url")
+                if it.get("type") == "photo":
+                    media_group.append(InputMediaPhoto(media=m_url, caption=c, parse_mode="HTML"))
+                else:
+                    media_group.append(InputMediaVideo(media=m_url, caption=c, parse_mode="HTML"))
+
+            try:
+                await message.reply_media_group(media=media_group)
+            except Exception as mg_err:
+                import logging
+                logging.warning(f"Direct URL MediaGroup failed ({mg_err}), sending items individually...")
+                for it in items[:5]:
+                    if it.get("type") == "photo":
+                        await message.reply_photo(photo=it["url"])
+                    else:
+                        await message.reply_video(video=it["url"], reply_markup=kb, supports_streaming=True)
+
+        # ----------------------------------------------------
+        # CASE B: Single Video / Reel
+        # ----------------------------------------------------
+        elif items[0].get("type") == "video":
+            v_url = items[0]["url"]
+            try:
+                # Direct CDN URL Send (~1.5s, 0 VPS Bandwidth)
+                sent_msg = await message.reply_video(
+                    video=v_url,
+                    caption=full_caption,
+                    parse_mode="HTML",
+                    reply_markup=kb,
+                    supports_streaming=True
+                )
+            except Exception as direct_err:
+                import logging
+                logging.warning(f"Direct video URL send failed: {direct_err}. Streaming via temp download...")
+                temp_dir = Path("temp_downloads")
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                temp_file = temp_dir / f"ig_{shortcode}.mp4"
+                try:
+                    await cobalt_service.download_file(v_url, temp_file)
+                    sent_msg = await message.reply_video(
+                        video=FSInputFile(temp_file),
+                        caption=full_caption,
+                        parse_mode="HTML",
+                        reply_markup=kb,
+                        supports_streaming=True
+                    )
+                finally:
+                    if temp_file.exists():
+                        try:
+                            temp_file.unlink()
+                        except Exception:
+                            pass
+
+        # ----------------------------------------------------
+        # CASE C: Single Photo
+        # ----------------------------------------------------
+        else:
+            p_url = items[0]["url"]
+            try:
+                sent_msg = await message.reply_photo(
+                    photo=p_url,
+                    caption=full_caption,
+                    parse_mode="HTML"
+                )
+            except Exception as direct_photo_err:
+                import logging
+                logging.warning(f"Direct photo URL send failed: {direct_photo_err}. Streaming via temp download...")
+                temp_dir = Path("temp_downloads")
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                temp_file = temp_dir / f"ig_{shortcode}.jpg"
+                try:
+                    await cobalt_service.download_file(p_url, temp_file)
+                    sent_msg = await message.reply_photo(
+                        photo=FSInputFile(temp_file),
+                        caption=full_caption,
+                        parse_mode="HTML"
+                    )
+                finally:
+                    if temp_file.exists():
+                        try:
+                            temp_file.unlink()
+                        except Exception:
+                            pass
+
+        # 5. Record download usage & Write Pro Cache
+        async with AsyncSessionLocal() as db_session:
+            sub_service = SubscriptionService(db_session)
+            await sub_service.record_download(user_id)
+
+            if sent_msg and u_hash:
+                f_id = None
+                if getattr(sent_msg, "video", None):
+                    f_id = sent_msg.video.file_id
+                elif getattr(sent_msg, "photo", None):
+                    f_id = sent_msg.photo[-1].file_id
+
+                if f_id:
+                    try:
+                        c_repo = CachedDownloadRepository(db_session)
+                        await c_repo.create_from_upload(
+                            source_url=url,
+                            source_platform="instagram",
+                            media_title=f"Instagram_{shortcode}",
+                            media_duration=None,
+                            media_uploader=None,
+                            telegram_file_id=f_id,
+                            file_size=15 * 1024 * 1024,
+                            file_type="video/mp4" if items[0]["type"] == "video" else "image/jpeg",
+                            quality="original",
+                            format_codec="h264",
+                            format_container="mp4" if items[0]["type"] == "video" else "jpg",
+                            url_hash=u_hash,
+                        )
+                    except Exception as cache_save_err:
+                        import logging
+                        logging.warning(f"Error caching Instagram file_id: {cache_save_err}")
+
+        # 6. Clean status message
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+    except Exception as exc:
+        import logging
+        logging.error(f"[InstagramInstant] Unexpected error: {exc}", exc_info=True)
+        try:
+            await status_msg.edit_text(f"❌ خطایی در پردازش ویدیو رخ داد:\n<code>{str(exc)[:150]}</code>", parse_mode="HTML")
+        except Exception:
+            await message.reply("❌ متاسفانه در دانلود اینستاگرام خطایی رخ داد.")
+    finally:
+        clear_session(user_id)
+        await state.clear()
+

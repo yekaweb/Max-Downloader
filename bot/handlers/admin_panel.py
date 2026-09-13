@@ -361,6 +361,83 @@ async def cmd_ig_login(message: Message, **kwargs):
     await message.answer(resp_msg, parse_mode="HTML")
 
 
+# ─── File Upload: دریافت و اعمال مستقیم فایل cookies.txt / JSON ──────────────────
+
+@router.message(F.document)
+async def handle_admin_cookie_file_upload(message: Message, bot: Message.bot):
+    """دریافت مستقیم فایل کوکی (cookies.txt یا فایل json) ارسالی توسط ادمین"""
+    if message.from_user.id not in settings.ADMIN_IDS_LIST:
+        return
+
+    doc = message.document
+    filename = (doc.file_name or "").lower()
+    
+    # Check if it's a cookie or txt or json file
+    if "cookie" in filename or filename.endswith(".txt") or filename.endswith(".json"):
+        loading = await message.reply("📥 <b>در حال پردازش و اعمال فایل کوکی...</b>", parse_mode="HTML")
+        try:
+            from pathlib import Path
+            import json
+            from services.instagram_service import instagram_service
+            
+            cookie_file = Path("/root/Max-Downloader/cookies.txt")
+            temp_dir = Path("/root/Max-Downloader/temp_downloads")
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_file = temp_dir / (doc.file_name or "uploaded_cookies.txt")
+            
+            await message.bot.download(doc, destination=temp_file)
+            
+            # Read content
+            content = temp_file.read_text(encoding="utf-8", errors="ignore")
+            
+            session_extracted = None
+            
+            if filename.endswith(".json") or content.strip().startswith("[") or content.strip().startswith("{"):
+                # JSON format cookies from Cookie-Editor
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        session_extracted = data.get("sessionid")
+                    elif isinstance(data, list):
+                        for c in data:
+                            if c.get("name") == "sessionid":
+                                session_extracted = c.get("value")
+                                break
+                    if session_extracted:
+                        instagram_service.set_session_id(session_extracted)
+                except Exception as json_err:
+                    logger.warning(f"Error parsing JSON cookie: {json_err}")
+            else:
+                # Netscape format cookies.txt
+                cookie_file.write_text(content, encoding="utf-8")
+                # Also extract instagram sessionid if present
+                for line in content.splitlines():
+                    if "instagram.com" in line and "sessionid" in line:
+                        parts = line.strip().split()
+                        if len(parts) >= 7:
+                            session_extracted = parts[6]
+                            instagram_service.set_session_id(session_extracted)
+                            break
+            
+            if temp_file.exists():
+                try:
+                    temp_file.unlink()
+                except Exception:
+                    pass
+                
+            await loading.edit_text(
+                "✅ <b>فایل کوکی با موفقیت دریافت و در سرور فعال شد!</b>\n\n"
+                f"📄 نام فایل: <code>{doc.file_name}</code>\n"
+                f"🔑 سشن اینستاگرام: {'فعال شد ✅' if session_extracted else 'ذخیره شد'}\n\n"
+                "ربات اکنون با سشن جدید آماده دانلود است.",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"[AdminCookieUpload] Error: {e}", exc_info=True)
+            await loading.edit_text(f"❌ خطا در پردازش فایل کوکی: {e}", parse_mode="HTML")
+
+
 __all__ = ["router", "admin_panel"]
+
 
 

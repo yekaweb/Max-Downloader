@@ -14,7 +14,7 @@ class CacheKeyboards:
     @staticmethod
     def main_cache_options_keyboard(
         quality_count: int,
-        url_hash: str
+        cache_id: int
     ) -> InlineKeyboardMarkup:
         """
         کیبورد اصلی سه دکمه‌ای:
@@ -22,22 +22,23 @@ class CacheKeyboards:
         2️⃣  پیدا کردن کیفیت‌های جدید
         3️⃣  بازگشت
         """
+        # Ensure callback_data is well under 64 bytes (cache_id is integer e.g. 12)
         return InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"📚 {quality_count} کیفیت از این ویدیو در آرشیو موجوده (دریافت سریع)",
-                    callback_data=f"show_cached:{url_hash}"
+                    text=f"⚡ دریافت سریع از آرشیو ({quality_count} کیفیت)",
+                    callback_data=f"show_cached:{cache_id}"
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="🔄 پیدا کردن کیفیت‌های جدید",
-                    callback_data=f"download_new:{url_hash}"
+                    callback_data=f"download_new:{cache_id}"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🔙 بازگشت",
+                    text="🔙 بازگشت به منو",
                     callback_data="back_to_main"
                 )
             ]
@@ -153,11 +154,11 @@ __all__ = ["CacheKeyboards", "get_cache_options_keyboard", "get_cached_qualities
 
 
 # Convenience function aliases
-def get_cache_options_keyboard(quality_count: int, url_hash: str) -> InlineKeyboardMarkup:
+def get_cache_options_keyboard(quality_count: int, cache_id: int) -> InlineKeyboardMarkup:
     """Convenience: 3-button main cache keyboard"""
-    return CacheKeyboards.main_cache_options_keyboard(quality_count, url_hash)
+    return CacheKeyboards.main_cache_options_keyboard(quality_count, cache_id)
 
 
-def get_cached_qualities_keyboard(qualities: List[CachedQuality]) -> InlineKeyboardMarkup:
+def get_cached_qualities_keyboard(qualities: List[CachedQuality], show_back: bool = True) -> InlineKeyboardMarkup:
     """Convenience: qualities selection keyboard"""
-    return CacheKeyboards.cached_qualities_keyboard(qualities)
+    return CacheKeyboards.cached_qualities_keyboard(qualities, show_back=show_back)

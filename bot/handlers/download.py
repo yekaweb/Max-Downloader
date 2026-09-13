@@ -113,8 +113,8 @@ async def handle_url(message: types.Message, state: FSMContext, session: AsyncSe
             f"🎯 یکی از گزینه‌های زیر را انتخاب کنید:"
         )
 
-        # 3-button keyboard
-        kb = get_cache_options_keyboard(quality_count, url_hash)
+        # 3-button keyboard (use cached_download.id to stay well under 64-byte Telegram limit)
+        kb = get_cache_options_keyboard(quality_count, cached_download.id)
 
         # Save URL info in state for later use
         await state.update_data(
@@ -210,19 +210,22 @@ async def show_cached_qualities(
 ):
     """
     Handle 📚 button: Show list of cached qualities for selection.
-    Callback format: show_cached:{url_hash}
+    Callback format: show_cached:{cache_id}
     """
     try:
-        _, url_hash = query.data.split(":", 1)
+        _, param = query.data.split(":", 1)
     except ValueError:
         await query.answer("❌ داده نامعتبر", show_alert=True)
         return
 
-    logger.info(f"[PRO CACHE] Showing qualities for hash: {url_hash[:12]}...")
+    logger.info(f"[PRO CACHE] Showing qualities for param: {param}")
 
     try:
         repo = CachedDownloadRepository(session)
-        cached_download = await repo.find_valid_by_url_hash(url_hash)
+        if param.isdigit():
+            cached_download = await repo.get_by_id(int(param))
+        else:
+            cached_download = await repo.find_valid_by_url_hash(param)
 
         if not cached_download or not cached_download.qualities:
             await query.answer("❌ کیفیت‌های کش شده یافت نشد", show_alert=True)
@@ -358,16 +361,27 @@ async def send_cached_file(
 
 
 @router.callback_query(F.data.startswith("download_new:"))
-async def download_new_callback(query: CallbackQuery, state: FSMContext):
+async def download_new_callback(query: CallbackQuery, state: FSMContext, session: AsyncSession):
     """
     Handle 🔄 button: Start fresh download for new qualities.
     Moves user to format selection flow.
     """
     await query.answer("🔄 شروع جستجوی کیفیت‌های جدید...")
 
-    # Get URL from state
+    # Get URL from state or DB
     data = await state.get_data()
     url = data.get('url')
+
+    if not url:
+        try:
+            _, param = query.data.split(":", 1)
+            if param.isdigit():
+                repo = CachedDownloadRepository(session)
+                cached = await repo.get_by_id(int(param))
+                if cached:
+                    url = cached.original_url
+        except Exception:
+            pass
 
     if not url:
         await query.answer("❌ لینک یافت نشد. لطفاً دوباره ارسال کنید.", show_alert=True)
@@ -410,35 +424,43 @@ async def download_new_callback(query: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "back_to_cache_options")
-async def back_to_cache_options(query: CallbackQuery, state: FSMContext):
+async def back_to_cache_options(query: CallbackQuery, state: FSMContext, session: AsyncSession):
     """
     Handle ◀️ back button from quality list → return to 3-button options.
     """
     data = await state.get_data()
-    url_hash = data.get('url_hash')
     cached_download_id = data.get('cached_download_id')
 
-    if not url_hash:
+    if not cached_download_id:
         await query.answer("❌ اطلاعات کش یافت نشد", show_alert=True)
         return
 
     try:
-        # Get quality count
-        from sqlalchemy import select, func
-        quality_count_result = await query.bot.session.execute(
-            select(func.count(CachedQuality.id)).where(
-                CachedQuality.cache_id == cached_download_id
-            )
-        ) if cached_download_id else None
+        repo = CachedDownloadRepository(session)
+        cached_download = await repo.get_by_id(cached_download_id)
 
-        quality_count = quality_count_result.scalar() if quality_count_result else 0
+        if not cached_download or not cached_download.qualities:
+            await query.answer("❌ اطلاعات کش یافت نشد", show_alert=True)
+            return
 
-        kb = get_cache_options_keyboard(quality_count, url_hash)
+        quality_count = len(cached_download.qualities)
+        kb = get_cache_options_keyboard(quality_count, cached_download.id)
         await state.set_state(DownloadStates.viewing_cached_files)
-        title = data.get('title', '')
+
+        title = cached_download.title or "بدون عنوان"
+        title_preview = title[:80] + "..." if len(title) > 80 else title
+        duration_text = ""
+        if cached_download.duration:
+            mins = cached_download.duration // 60
+            secs = cached_download.duration % 60
+            duration_text = f"\n⏱ مدت: {mins}:{secs:02d}"
+
+        access_text = f"\n📊 تعداد دریافت: {cached_download.access_count} بار"
+
         await query.message.edit_text(
             f"✅ **این محتوا قبلاً دانلود شده!**\n\n"
-            f"🔢 **{quality_count} کیفیت** در آرشیو موجود است\n\n"
+            f"📹 **{title_preview}**{duration_text}\n"
+            f"🔢 **{quality_count} کیفیت** در آرشیو موجود است{access_text}\n\n"
             f"🎯 یکی از گزینه‌های زیر را انتخاب کنید:",
             reply_markup=kb,
             parse_mode="Markdown"

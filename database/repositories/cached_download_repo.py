@@ -28,6 +28,16 @@ class CachedDownloadRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_id(self, cache_id: int) -> Optional[CachedDownload]:
+        """Get cached download by ID with qualities eager-loaded"""
+        stmt = (
+            select(CachedDownload)
+            .options(selectinload(CachedDownload.qualities))
+            .where(CachedDownload.id == cache_id)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def find_valid_by_url_hash(self, url_hash: str) -> Optional[CachedDownload]:
         """Find valid (non-expired) cached download by URL hash"""
         now = datetime.utcnow()

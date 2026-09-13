@@ -30,7 +30,7 @@ def _build_ydl_opts(extra: dict = None) -> dict:
         # Rotate clients to mimic real users and bypass blocks
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web_safari', 'mweb', 'ios'],
+                'player_client': ['all'],
                 'lang': ['en', 'fa'],
             }
         },
@@ -118,13 +118,23 @@ async def get_exact_format_sizes(url: str) -> Dict:
             return {"error": "yt-dlp returned no info for this URL"}
 
         formats = info.get('formats', [])
+        duration = info.get('duration', 0)
         result = {
             "video_formats": {},
             "audio_formats": {},
             "codec_sizes": {},
             "title": info.get('title', 'Media'),
-            "duration": info.get('duration', 0),
+            "duration": duration,
         }
+
+        # Calculate best audio size to add to DASH video-only streams
+        audio_sizes = []
+        for fmt in formats:
+            if (not fmt.get('vcodec') or fmt.get('vcodec') == 'none') and fmt.get('acodec') and fmt.get('acodec') != 'none':
+                sz = fmt.get('filesize') or fmt.get('filesize_approx') or 0
+                if sz:
+                    audio_sizes.append(sz)
+        best_audio_sz = max(audio_sizes) if audio_sizes else (duration * 16000)
 
         # ── Process VIDEO formats ─────────────────────────────────────────────
         video_by_height: Dict[int, list] = {}
@@ -140,14 +150,16 @@ async def get_exact_format_sizes(url: str) -> Dict:
                 continue  # Skip formats with unknown resolution
 
             # FIX Bug #3: do NOT gate on filesize — it is often None for DASH streams
-            filesize = fmt.get('filesize') or fmt.get('filesize_approx') or 0
+            raw_filesize = fmt.get('filesize') or fmt.get('filesize_approx') or 0
+            is_muxed = fmt.get('acodec') and fmt.get('acodec') != 'none'
+            filesize = raw_filesize if is_muxed else (raw_filesize + best_audio_sz if raw_filesize else 0)
 
             codec_name = vcodec.split('.')[0]  # "avc1" → "h264" normalization below
 
             # Normalize codec names
             if codec_name.startswith('avc'):
                 codec_name = 'h264'
-            elif codec_name.startswith('av01'):
+            elif codec_name.startswith('av01') or codec_name.startswith('av1'):
                 codec_name = 'av1'
             elif codec_name.startswith('vp09') or codec_name.startswith('vp9'):
                 codec_name = 'vp9'
@@ -170,6 +182,7 @@ async def get_exact_format_sizes(url: str) -> Dict:
             480:  '480p',
             360:  '360p',
             240:  '240p',
+            144:  '144p',
         }
 
         for height, label in height_labels.items():
@@ -177,15 +190,14 @@ async def get_exact_format_sizes(url: str) -> Dict:
                 continue
 
             fmts = video_by_height[height]
-            # Prefer entries with a known filesize for display
+            # Prefer entries with a known filesize for display (or largest/most common)
             fmts_with_size = [f for f in fmts if f['filesize'] > 0]
             best_fmt = (
-                min(fmts_with_size, key=lambda x: x['filesize'])
+                max(fmts_with_size, key=lambda x: x['filesize'])
                 if fmts_with_size
                 else fmts[0]
             )
 
-            # FIX Bug #7: size_mb may be None — store None explicitly
             size_mb = round(best_fmt['filesize'] / (1024 * 1024), 1) if best_fmt['filesize'] else None
 
             result['video_formats'][label] = {
@@ -195,10 +207,15 @@ async def get_exact_format_sizes(url: str) -> Dict:
                 'ext': best_fmt['ext'],
             }
 
-            # Track per-codec best size
-            vcodec = best_fmt['vcodec']
-            if vcodec not in result['codec_sizes'] and size_mb:
-                result['codec_sizes'][vcodec] = {'size_mb': size_mb}
+        # Track per-codec sizes across all video formats
+        for c in ['h264', 'av1', 'vp9']:
+            c_sizes = [
+                fmt['filesize'] for fmts in video_by_height.values()
+                for fmt in fmts if fmt['vcodec'] == c and fmt['filesize'] > 0
+            ]
+            if c_sizes:
+                avg_mb = round(sum(c_sizes) / len(c_sizes) / (1024 * 1024), 1)
+                result['codec_sizes'][c] = {'size_mb': avg_mb}
 
         # ── Process AUDIO-ONLY formats + Language/Dubbed tracks ──────────────
         # Language name map for common language codes

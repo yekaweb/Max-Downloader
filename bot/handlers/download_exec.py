@@ -26,7 +26,7 @@ _BASE_YDL_OPTS = {
     'cookiefile': str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'web_safari', 'mweb', 'ios'],
+            'player_client': ['all'],
             'lang': ['en', 'fa'],
         }
     },
@@ -108,7 +108,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
             quality_str = session_data.get("quality", "720")
             audio_lang = session_data.get("audio_lang")  # Phase 5.5: None = default
 
-            # FIX Bug #4: added "1440" key
+            # Supported video qualities
             quality_map = {
                 "4k": 2160,
                 "1440": 1440,
@@ -117,6 +117,7 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                 "480": 480,
                 "360": 360,
                 "240": 240,
+                "144": 144,
             }
             height = quality_map.get(quality_str, 720)
 

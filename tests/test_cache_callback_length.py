@@ -31,3 +31,37 @@ def test_cached_qualities_keyboard_callback_length():
             assert len(btn.callback_data.encode('utf-8')) <= 64, (
                 f"Button '{btn.text}' callback_data '{btn.callback_data}' exceeds 64 bytes!"
             )
+
+
+def test_video_quality_and_codec_keyboards():
+    from bot.keyboards.inline.download import get_video_quality_keyboard, get_video_codec_keyboard
+    
+    mock_format_info = {
+        "video_formats": {
+            "4k": {"size_mb": 619.0},
+            "1440p": {"size_mb": 278.1},
+            "1080p": {"size_mb": 133.9},
+            "720p": {"size_mb": 74.7},
+            "480p": {"size_mb": 49.5},
+            "360p": {"size_mb": 39.0},
+            "240p": {"size_mb": 27.3},
+            "144p": {"size_mb": 24.0},
+        },
+        "codec_sizes": {
+            "h264": {"size_mb": 74.7},
+            "av1": {"size_mb": 60.2},
+            "vp9": {"size_mb": 65.1},
+        }
+    }
+    
+    q_kb = get_video_quality_keyboard(mock_format_info)
+    assert len(q_kb.inline_keyboard) == 9  # 8 qualities + 1 back button
+    for row in q_kb.inline_keyboard:
+        for btn in row:
+            assert len(btn.callback_data.encode('utf-8')) <= 64
+            
+    c_kb = get_video_codec_keyboard(mock_format_info["codec_sizes"])
+    assert len(c_kb.inline_keyboard) == 4  # 3 codecs + 1 back button
+    for row in c_kb.inline_keyboard:
+        for btn in row:
+            assert len(btn.callback_data.encode('utf-8')) <= 64

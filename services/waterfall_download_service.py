@@ -28,7 +28,7 @@ _BASE_YTDLP_CONFIG = {
     'cookiefile': str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'web_safari', 'mweb', 'ios'],
+            'player_client': ['all'],
             'lang': ['en', 'fa'],
         }
     },
@@ -167,6 +167,7 @@ class WaterfallDownloadService:
                 "480": 480,
                 "360": 360,
                 "240": 240,
+                "144": 144,
             }
             height = quality_map.get(quality, 720)
             audio_sel = f"bestaudio[language={audio_lang}]/bestaudio" if audio_lang else "bestaudio"

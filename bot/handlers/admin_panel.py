@@ -406,42 +406,63 @@ async def handle_admin_cookie_file_upload(message: Message, bot: Bot):
 
         session_extracted = None
         ds_user_extracted = None
+        netscape_lines = []
 
-        # 1. Try JSON parsing
+        # 1. Try JSON parsing (Cookie-Editor format or JSON array/dict)
         if content.startswith("[") or content.startswith("{"):
             try:
                 data = json.loads(content)
+                cookies_list = []
                 if isinstance(data, dict):
+                    cookies_list = data.get("cookies", [])
                     session_extracted = data.get("sessionid")
                     ds_user_extracted = data.get("ds_user_id")
                 elif isinstance(data, list):
-                    for c in data:
+                    cookies_list = data
+
+                if cookies_list:
+                    netscape_lines.append("# Netscape HTTP Cookie File\n")
+                    for c in cookies_list:
                         if isinstance(c, dict):
-                            if c.get("name") == "sessionid":
-                                session_extracted = c.get("value")
-                            elif c.get("name") == "ds_user_id":
-                                ds_user_extracted = c.get("value")
+                            name = c.get("name", "")
+                            val = c.get("value", "")
+                            if name == "sessionid":
+                                session_extracted = val
+                            elif name == "ds_user_id":
+                                ds_user_extracted = val
+                            domain = c.get("domain", ".instagram.com")
+                            flag = "TRUE" if domain.startswith(".") else "FALSE"
+                            path = c.get("path", "/")
+                            secure = "TRUE" if c.get("secure", True) else "FALSE"
+                            exp = int(c.get("expirationDate", 1999999999))
+                            netscape_lines.append(f"{domain}\t{flag}\t{path}\t{secure}\t{exp}\t{name}\t{val}\n")
+                    
+                    if netscape_lines:
+                        cookie_file.write_text("".join(netscape_lines), encoding="utf-8")
             except Exception as json_err:
                 logger.warning(f"[AdminCookieUpload] JSON parse error: {json_err}")
 
-        # 2. Try Netscape / line-by-line parsing
-        if not session_extracted:
+        # 2. Try Netscape / line-by-line parsing if not JSON
+        if not netscape_lines:
             for line in content.splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
+                line_str = line.strip()
+                if not line_str or line_str.startswith("#"):
                     continue
-                if "instagram.com" in line and "sessionid" in line:
-                    parts = line.split()
+                if "instagram.com" in line_str and "sessionid" in line_str:
+                    parts = line_str.split()
                     if len(parts) >= 7:
                         session_extracted = parts[6]
                     elif len(parts) >= 2:
                         session_extracted = parts[-1]
-                elif "instagram.com" in line and "ds_user_id" in line:
-                    parts = line.split()
+                elif "instagram.com" in line_str and "ds_user_id" in line_str:
+                    parts = line_str.split()
                     if len(parts) >= 7:
                         ds_user_extracted = parts[6]
-                elif re.match(r"^sessionid[\s:=]+", line, re.IGNORECASE):
-                    session_extracted = re.sub(r"^sessionid[\s:=]+", "", line, flags=re.IGNORECASE).strip()
+                elif re.match(r"^sessionid[\s:=]+", line_str, re.IGNORECASE):
+                    session_extracted = re.sub(r"^sessionid[\s:=]+", "", line_str, flags=re.IGNORECASE).strip()
+
+            if content.startswith("# Netscape") or ("\t" in content and "instagram.com" in content):
+                cookie_file.write_text(content, encoding="utf-8")
 
         # 3. Try regex search for raw Instagram session pattern (e.g. 681234567%3A...)
         if not session_extracted:
@@ -452,10 +473,6 @@ async def handle_admin_cookie_file_upload(message: Message, bot: Bot):
         # 4. If session found, apply to instagram_service
         if session_extracted:
             instagram_service.set_session_id(session_extracted, ds_user_extracted or "")
-
-        # 5. If it looks like Netscape format, also write/replace cookies.txt
-        if "instagram.com" in content or "youtube.com" in content or content.startswith("# Netscape"):
-            cookie_file.write_text(content, encoding="utf-8")
 
         if session_extracted:
             await loading.edit_text(

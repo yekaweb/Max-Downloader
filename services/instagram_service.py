@@ -546,6 +546,16 @@ class InstagramService:
                     items = []
                     for entry in entries:
                         e_url = entry.get("url")
+                        if not e_url:
+                            e_fmts = entry.get("formats") or []
+                            prog = [f for f in e_fmts if f.get("url") and f.get("vcodec") != "none" and f.get("acodec") != "none"]
+                            if not prog:
+                                prog = [f for f in e_fmts if f.get("url") and f.get("vcodec") != "none"]
+                            if not prog:
+                                prog = [f for f in e_fmts if f.get("url")]
+                            if prog:
+                                e_url = prog[-1].get("url")
+
                         if e_url:
                             m_type = "video" if entry.get("vcodec") != "none" else "photo"
                             items.append({"type": m_type, "url": e_url, "thumbnail": entry.get("thumbnail")})
@@ -562,6 +572,19 @@ class InstagramService:
                         }
 
                 direct_url = info.get("url")
+                if not direct_url:
+                    formats = info.get("formats") or []
+                    prog_formats = [
+                        f for f in formats
+                        if f.get("url") and f.get("vcodec") != "none" and f.get("acodec") != "none"
+                    ]
+                    if not prog_formats:
+                        prog_formats = [f for f in formats if f.get("url") and f.get("vcodec") != "none"]
+                    if not prog_formats:
+                        prog_formats = [f for f in formats if f.get("url")]
+                    if prog_formats:
+                        direct_url = prog_formats[-1].get("url")
+
                 if direct_url:
                     m_type = "video" if info.get("vcodec") != "none" else "photo"
                     return {

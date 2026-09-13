@@ -57,3 +57,27 @@ def test_vip_tiers_calculation():
     tier_5 = dummy.calculate_vip_tier(5)
     assert tier_5["title"] == VIP_TIERS["rostam"]["title"]
     assert tier_5["daily_limit_gb"] == 999999
+
+
+def test_instagram_service_detection_and_session(tmp_path, monkeypatch):
+    from services.instagram_service import InstagramService
+    service = InstagramService()
+    
+    # Test URL detection
+    assert service.is_instagram_url("https://www.instagram.com/reel/DdNM4okJi4P/")
+    assert service.is_instagram_url("https://instagram.com/p/C123456/")
+    assert not service.is_instagram_url("https://www.youtube.com/watch?v=12345")
+    
+    # Test session setup
+    session_file = tmp_path / "instagram_session.json"
+    cookie_file = tmp_path / "cookies.txt"
+    monkeypatch.setattr("services.instagram_service.SESSION_FILE", session_file)
+    monkeypatch.setattr("services.instagram_service.COOKIE_FILE", cookie_file)
+    
+    assert service.set_session_id("test_session_id_999", "12345678")
+    assert service.has_active_session()
+    assert cookie_file.exists()
+    content = cookie_file.read_text()
+    assert "test_session_id_999" in content
+    assert "instagram.com" in content
+

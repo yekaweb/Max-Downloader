@@ -106,7 +106,19 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
         if max_file_size:
             ydl_opts["max_filesize"] = max_file_size
 
-        if format_type == "video":
+        is_youtube = "youtube.com" in url or "youtu.be" in url
+
+        if not is_youtube:
+            if format_type == "video":
+                ydl_opts["format"] = "bestvideo+bestaudio/best"
+            else:
+                ydl_opts["format"] = "bestaudio/best"
+                ydl_opts["postprocessors"] = [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "128",
+                }]
+        elif format_type == "video":
             codec = session_data.get("codec")
             quality_str = session_data.get("quality", "720")
             audio_lang = session_data.get("audio_lang")  # Phase 5.5: None = default
@@ -156,7 +168,6 @@ async def start_download(message: Message, user_id: int, state: FSMContext):
                     f"bestvideo[height<={height}]+{audio_sel}"
                     f"/best[height<={height}]"
                 )
-
 
         else:
             audio_fmt = session_data.get("audio_format", {"format": "mp3", "bitrate": "128"})

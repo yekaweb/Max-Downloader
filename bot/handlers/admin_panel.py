@@ -252,13 +252,69 @@ async def cb_broadcast(query: CallbackQuery, **kwargs):
     if query.from_user.id not in settings.ADMIN_IDS_LIST:
         await query.answer("❌ دسترسی رد شد", show_alert=True)
         return
-    try:
-        await query.answer()
-    except Exception:
-        pass
     await query.message.answer(
         "📢 برای ارسال پیام همگانی، از دستور /broadcast استفاده کنید."
     )
 
 
+# ─── Commands: مدیریت سشن و کوکی اینستاگرام ─────────────────────────────────
+
+@router.message(Command("set_ig_cookie"))
+async def cmd_set_ig_cookie(message: Message, **kwargs):
+    """ثبت یا به‌روزرسانی کوکی اینستاگرام توسط ادمین"""
+    if message.from_user.id not in settings.ADMIN_IDS_LIST:
+        await message.answer("❌ شما دسترسی ادمین ندارید.")
+        return
+
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 2:
+        await message.answer(
+            "⚠️ <b>فرمت دستور نامعتبر است!</b>\n\n"
+            "لطفاً مقدار <code>sessionid</code> را به شکل زیر ارسال کنید:\n"
+            "<code>/set_ig_cookie your_session_id [optional_ds_user_id]</code>\n\n"
+            "💡 <b>نحوه دریافت sessionid:</b>\n"
+            "۱. در مرورگر وارد سایت instagram.com شوید.\n"
+            "۲. کلید F12 را بزنید و به تب <code>Application &gt; Cookies</code> بروید.\n"
+            "۳. مقدار کوکی <code>sessionid</code> را کپی کرده و در دستور بالا قرار دهید.",
+            parse_mode="HTML",
+        )
+        return
+
+    session_id = parts[1].strip()
+    ds_user_id = parts[2].strip() if len(parts) > 2 else ""
+
+    from services.instagram_service import instagram_service
+    success = instagram_service.set_session_id(session_id, ds_user_id)
+
+    if success:
+        await message.answer(
+            "✅ <b>کوکی اینستاگرام با موفقیت تنظیم و فعال شد!</b>\n\n"
+            "ربات اکنون می‌تواند تمامی ریلزها، پست‌ها و استوری‌های اینستاگرام را بدون مشکل لاگین دانلود کند.",
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer("❌ خطا در ذخیره‌سازی کوکی اینستاگرام.")
+
+
+@router.message(Command("ig_status"))
+async def cmd_ig_status(message: Message, **kwargs):
+    """بررسی وضعیت سشن اینستاگرام"""
+    if message.from_user.id not in settings.ADMIN_IDS_LIST:
+        await message.answer("❌ شما دسترسی ادمین ندارید.")
+        return
+
+    from services.instagram_service import instagram_service
+    has_session = instagram_service.has_active_session()
+
+    if has_session:
+        await message.answer("✅ <b>سشن اینستاگرام فعال و تنظیم شده است.</b>", parse_mode="HTML")
+    else:
+        await message.answer(
+            "⚠️ <b>هیچ سشن یا کوکی فعالی برای اینستاگرام تنظیم نشده است.</b>\n\n"
+            "برای فعال‌سازی از دستور <code>/set_ig_cookie session_id</code> استفاده کنید.",
+            parse_mode="HTML",
+        )
+
+
 __all__ = ["router", "admin_panel"]
+

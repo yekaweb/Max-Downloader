@@ -125,8 +125,13 @@ async def handle_url_submission(message: Message, state: FSMContext):
     # Send loading message
     loading_msg = await message.answer("🔄 <b>در حال دریافت اطلاعات ویدیو...</b>", parse_mode="HTML")
     
+    from services.instagram_service import instagram_service
     from utils.format_sizes import get_exact_format_sizes
-    format_info = await get_exact_format_sizes(url)
+
+    if instagram_service.is_instagram_url(url):
+        format_info = await instagram_service.get_media_info(url)
+    else:
+        format_info = await get_exact_format_sizes(url)
 
     # Delete loading message
     try:
@@ -135,12 +140,23 @@ async def handle_url_submission(message: Message, state: FSMContext):
         pass
         
     if "error" in format_info:
-        await message.reply(
-            f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
-            f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
-            f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
-            parse_mode="HTML",
-        )
+        if format_info.get("error") == "LOGIN_REQUIRED":
+            await message.reply(
+                "⚠️ <b>دانلود از اینستاگرام نیازمند فعال‌سازی کوکی است</b>\n\n"
+                "سرورهای اینستاگرام به دلیل محدودیت آی‌پی دیتاسنتر نیاز به یک سشن معتبر دارند.\n\n"
+                "🔑 <b>راهنمای ادمین ربات:</b>\n"
+                "برای فعال‌سازی دانلود، دستور زیر را ارسال کنید:\n"
+                "<code>/set_ig_cookie your_session_id</code>\n\n"
+                "💡 <i>نکته: مقدار sessionid را می‌توانید از بخش Inspect &gt; Application &gt; Cookies مرورگر کپی نمایید.</i>",
+                parse_mode="HTML",
+            )
+        else:
+            await message.reply(
+                f"❌ <b>دریافت اطلاعات ویدیو با شکست مواجه شد!</b>\n\n"
+                f"خطا:\n<code>{format_info['error'][:200]}</code>\n\n"
+                f"لطفاً یک لینک دیگر امتحان کنید یا مجدداً تلاش نمایید.",
+                parse_mode="HTML",
+            )
         clear_session(message.from_user.id)
         await state.clear()
         return

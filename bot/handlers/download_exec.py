@@ -538,7 +538,7 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
         # ----------------------------------------------------
         if res.get("is_album") and len(items) > 1:
             media_group = []
-            for idx, it in enumerate(items[:10]):  # Telegram limit is max 10 items per media group
+            for idx, it in enumerate(items[:10]):
                 c = full_caption if idx == 0 else None
                 m_url = it.get("url")
                 if it.get("type") == "photo":
@@ -561,9 +561,30 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
         # CASE B: Single Video / Reel
         # ----------------------------------------------------
         elif items[0].get("type") == "video":
-            v_url = items[0]["url"]
-            try:
-                # Direct CDN URL Send (~1.5s, 0 VPS Bandwidth)
+            temp_dir = Path("temp_downloads")
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_file = temp_dir / f"ig_{shortcode}.mp4"
+            
+            # Download file locally with session cookies (~2-4s)
+            dl_file = await instagram_service.download_media_to_file(url, temp_file)
+            if dl_file and os.path.exists(dl_file):
+                try:
+                    sent_msg = await message.reply_video(
+                        video=FSInputFile(dl_file),
+                        caption=full_caption,
+                        parse_mode="HTML",
+                        reply_markup=kb,
+                        supports_streaming=True
+                    )
+                finally:
+                    if os.path.exists(dl_file):
+                        try:
+                            os.remove(dl_file)
+                        except Exception:
+                            pass
+            else:
+                # Fallback to direct URL send if local download failed
+                v_url = items[0]["url"]
                 sent_msg = await message.reply_video(
                     video=v_url,
                     caption=full_caption,
@@ -571,27 +592,6 @@ async def handle_instant_instagram_download(message: Message, url: str, state: F
                     reply_markup=kb,
                     supports_streaming=True
                 )
-            except Exception as direct_err:
-                import logging
-                logging.warning(f"Direct video URL send failed: {direct_err}. Streaming via temp download...")
-                temp_dir = Path("temp_downloads")
-                temp_dir.mkdir(parents=True, exist_ok=True)
-                temp_file = temp_dir / f"ig_{shortcode}.mp4"
-                try:
-                    await cobalt_service.download_file(v_url, temp_file)
-                    sent_msg = await message.reply_video(
-                        video=FSInputFile(temp_file),
-                        caption=full_caption,
-                        parse_mode="HTML",
-                        reply_markup=kb,
-                        supports_streaming=True
-                    )
-                finally:
-                    if temp_file.exists():
-                        try:
-                            temp_file.unlink()
-                        except Exception:
-                            pass
 
         # ----------------------------------------------------
         # CASE C: Single Photo

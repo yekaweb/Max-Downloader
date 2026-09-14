@@ -175,6 +175,45 @@ class InstagramService:
             logger.error(f"[InstagramService] Login error: {e}")
             return False, f"❌ خطا در لاگین: {str(e)[:150]}"
 
+    async def download_media_to_file(self, url: str, output_path: Path) -> Optional[str]:
+        """
+        Download Instagram media directly to disk using yt-dlp with cookies.
+        Returns the absolute path to the downloaded file.
+        """
+        loop = asyncio.get_running_loop()
+        def _sync_dl():
+            import glob
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "outtmpl": str(output_path),
+                "cookiefile": str(COOKIE_FILE) if COOKIE_FILE.exists() else None,
+                "format": "best",
+                "socket_timeout": 20,
+            }
+            proxy = get_random_proxy()
+            if proxy:
+                ydl_opts["proxy"] = proxy
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                raw_name = ydl.prepare_filename(info)
+                base = os.path.splitext(raw_name)[0]
+                matches = [f for f in glob.glob(f"{base}.*") if os.path.isfile(f)]
+                if matches:
+                    return max(matches, key=os.path.getsize)
+                return raw_name
+
+        try:
+            res_path = await loop.run_in_executor(None, _sync_dl)
+            if res_path and os.path.exists(res_path):
+                return res_path
+            return None
+        except Exception as e:
+            logger.error(f"[InstagramService] Direct download failed: {e}")
+            return None
+
     # =========================================================================
     # NEXT-GEN WATERFALL RESOLUTION ENGINES (ZERO AUTH & ULTRA-FAST)
     # =========================================================================
@@ -182,8 +221,8 @@ class InstagramService:
     async def resolve_media(self, url: str) -> Dict[str, Any]:
         """
         Master Waterfall Resolution Entrypoint:
-        Tries Tier 1 (Embed) -> Tier 2 (Cobalt) -> Tier 3 (Scraper APIs) -> Tier 4 (yt-dlp/Instagrapi).
-        Returns structured dict with media items, direct URLs, caption, and engine info.
+        If active session exists: uses authenticated engine (1-3s).
+        Otherwise: tries Embed -> Web Info -> Cobalt -> Scrapers -> Session fallback.
         """
         clean_url = url.split("?")[0].rstrip("/")
         if not clean_url.startswith("http"):
@@ -191,6 +230,19 @@ class InstagramService:
 
         shortcode = self.extract_shortcode(clean_url) or "media"
         is_reel = "/reel/" in clean_url or "/reels/" in clean_url or "/tv/" in clean_url
+
+        # ----------------------------------------------------
+        # PRIORITY 1: Authenticated Session (if cookie exists)
+        # ----------------------------------------------------
+        if self.has_active_session():
+            try:
+                logger.info(f"[InstagramService] Session is active. Trying Authenticated Engine for {clean_url}")
+                res_native = await self._resolve_via_ytdlp_or_instagrapi(clean_url, shortcode)
+                if res_native and res_native.get("success"):
+                    logger.info(f"[InstagramService] Authenticated Engine succeeded for {shortcode}")
+                    return res_native
+            except Exception as e:
+                logger.warning(f"[InstagramService] Authenticated Engine failed: {e}")
 
         # ----------------------------------------------------
         # TIER 1: Direct Embed Scraper (Zero Auth, ~300ms)
@@ -241,16 +293,17 @@ class InstagramService:
             logger.debug(f"[InstagramService] Tier 4 failed: {e}")
 
         # ----------------------------------------------------
-        # TIER 5: Fallback to yt-dlp / Instagrapi
+        # TIER 5: Fallback to yt-dlp / Instagrapi (if not tried yet)
         # ----------------------------------------------------
-        try:
-            logger.info(f"[InstagramService] Attempting Tier 5 (yt-dlp/Instagrapi) for {clean_url}")
-            res_native = await self._resolve_via_ytdlp_or_instagrapi(clean_url, shortcode)
-            if res_native and res_native.get("success"):
-                logger.info(f"[InstagramService] Tier 5 succeeded for {shortcode}")
-                return res_native
-        except Exception as e:
-            logger.error(f"[InstagramService] Tier 5 failed: {e}")
+        if not self.has_active_session():
+            try:
+                logger.info(f"[InstagramService] Attempting Tier 5 (yt-dlp/Instagrapi) for {clean_url}")
+                res_native = await self._resolve_via_ytdlp_or_instagrapi(clean_url, shortcode)
+                if res_native and res_native.get("success"):
+                    logger.info(f"[InstagramService] Tier 5 succeeded for {shortcode}")
+                    return res_native
+            except Exception as e:
+                logger.error(f"[InstagramService] Tier 5 failed: {e}")
 
         return {
             "success": False,

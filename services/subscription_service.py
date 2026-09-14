@@ -136,9 +136,10 @@ class SubscriptionService:
         try:
             download = Download(
                 user_id=user_id,
+                url=f"https://{platform}.com",
+                module_type=platform,
                 file_size=file_size,
                 status="completed",
-                platform=platform,
             )
             self.db.add(download)
             await self.db.commit()

@@ -596,69 +596,62 @@ async def use_cached_file_legacy(
 @router.callback_query(F.data.startswith("ig_audio:"))
 async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContext, bot: Bot):
     """Handle 🎵 استخراج صوت (MP3) button for Instagram Reels/Posts."""
-    await query.answer("🔄 در حال استخراج و آماده‌سازی فایل صوتی...")
+    await query.answer("🔄 در حال استخراج صوت...")
     shortcode = query.data.split(":", 1)[1]
-    url = f"https://www.instagram.com/p/{shortcode}/"
+    url = f"https://www.instagram.com/reel/{shortcode}/"
     
-    status_msg = await query.message.reply("🎵 <b>در حال استخراج صوت از ویدیوی اینستاگرام...</b>", parse_mode="HTML")
+    status_msg = await query.message.reply("🎵 <b>در حال استخراج صوت با کیفیت بالا (MP3)...</b>", parse_mode="HTML")
     
     import asyncio
+    import os
     from pathlib import Path
     from aiogram.types import FSInputFile
-    from services.cobalt_service import cobalt_service
     from services.instagram_service import instagram_service
     
     temp_dir = Path("temp_downloads")
     temp_dir.mkdir(parents=True, exist_ok=True)
-    temp_mp3 = temp_dir / f"ig_{shortcode}.mp3"
-    temp_mp4 = temp_dir / f"ig_{shortcode}_src.mp4"
+    temp_mp3 = temp_dir / f"ig_audio_{shortcode}.mp3"
+    temp_src = temp_dir / f"ig_src_{shortcode}.mp4"
     
     try:
-        # Tier 1: Try Cobalt audio extraction
-        cobalt_res = await cobalt_service.get_media_stream_url(url, audio_only=True)
-        if cobalt_res.get("success") and cobalt_res.get("url"):
-            await cobalt_service.download_file(cobalt_res["url"], temp_mp3)
+        # 1. Download media directly to disk with session cookies (~2-3s)
+        dl_file = await instagram_service.download_media_to_file(url, temp_src)
+        if not dl_file or not os.path.exists(dl_file):
+            # Fallback to /p/ URL
+            dl_file = await instagram_service.download_media_to_file(f"https://www.instagram.com/p/{shortcode}/", temp_src)
+
+        if dl_file and os.path.exists(dl_file):
+            # 2. Extract MP3 audio stream using ffmpeg
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-y", "-i", str(dl_file), "-vn", "-c:a", "libmp3lame", "-b:a", "192k", str(temp_mp3),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
+            )
+            await proc.wait()
+
             if temp_mp3.exists() and temp_mp3.stat().st_size > 1000:
                 await query.message.reply_audio(
                     audio=FSInputFile(temp_mp3),
                     title=f"Instagram Audio ({shortcode})",
                     performer="Instagram Audio",
-                    caption=f"🎵 فایل صوتی ریلز اینستاگرام ({shortcode})\n\n⚡ <i>@MaxDownloaderBot</i>",
+                    caption=f"🎵 <b>فایل صوتی استخراج شده (MP3 - 192kbps)</b>\n\n⚡ <i>@MaxDownloaderBot</i>",
                     parse_mode="HTML"
                 )
-                await status_msg.delete()
-                return
-
-        # Tier 2: Direct resolution and ffmpeg extraction
-        res = await instagram_service.resolve_media(url)
-        if res.get("success") and res.get("items"):
-            v_url = res["items"][0]["url"]
-            await cobalt_service.download_file(v_url, temp_mp4)
-            if temp_mp4.exists():
-                # Convert to MP3 using ffmpeg
-                proc = await asyncio.create_subprocess_exec(
-                    "ffmpeg", "-y", "-i", str(temp_mp4), "-vn", "-c:a", "libmp3lame", "-b:a", "192k", str(temp_mp3),
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL
-                )
-                await proc.wait()
-                if temp_mp3.exists() and temp_mp3.stat().st_size > 1000:
-                    await query.message.reply_audio(
-                        audio=FSInputFile(temp_mp3),
-                        title=f"Instagram Audio ({shortcode})",
-                        performer="Instagram Audio",
-                        caption=f"🎵 فایل صوتی ریلز اینستاگرام ({shortcode})\n\n⚡ <i>@MaxDownloaderBot</i>",
-                        parse_mode="HTML"
-                    )
+                try:
                     await status_msg.delete()
-                    return
+                except Exception:
+                    pass
+                return
 
         await status_msg.edit_text("❌ متاسفانه استخراج صوت از این ویدیو امکان‌پذیر نشد.", parse_mode="HTML")
     except Exception as e:
         logger.error(f"[InstagramAudio] Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ خطا در استخراج صوت: {str(e)[:100]}", parse_mode="HTML")
+        try:
+            await status_msg.edit_text(f"❌ خطا در استخراج صوت:\n<code>{str(e)[:100]}</code>", parse_mode="HTML")
+        except Exception:
+            pass
     finally:
-        for f in [temp_mp3, temp_mp4]:
+        for f in [temp_mp3, temp_src]:
             if f.exists():
                 try:
                     f.unlink()

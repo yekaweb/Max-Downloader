@@ -58,9 +58,9 @@ docker build -t dlbot .
 # اجرا
 docker run -d \
   --name dlbot \
-  -e BOT_TOKEN=8603008659:AAH1UaVOCJpE3heq8CdUtGffvSJFuDI53Ao \
-  -e PYROGRAM_APP_ID=38449735 \
-  -e PYROGRAM_APP_HASH=30c6936b37f0767f3c3f128df9b2ca00 \
+  -e BOT_TOKEN=YOUR_BOT_TOKEN_HERE \
+  -e PYROGRAM_APP_ID=YOUR_PYROGRAM_APP_ID \
+  -e PYROGRAM_APP_HASH=YOUR_PYROGRAM_APP_HASH \
   dlbot
 ```
 

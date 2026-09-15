@@ -82,11 +82,11 @@ python3 -c "import aiogram; import pyrogram; import yt_dlp; print('✅ All impor
 ```bash
 # 1. .env file existing است، صرفاً verify کنید
 cat .env | grep BOT_TOKEN
-# Output: BOT_TOKEN=8603008659:AAH1...
+# Output: BOT_TOKEN=YOUR_BOT_TOKEN_HERE
 
 # 2. یقینی شوید PYROGRAM credentials موجود‌اند
 cat .env | grep PYROGRAM
-# Output: PYROGRAM_APP_ID=38449735, PYROGRAM_APP_HASH=30c6...
+# Output: PYROGRAM_APP_ID=YOUR_PYROGRAM_APP_ID, PYROGRAM_APP_HASH=YOUR_PYROGRAM_APP_HASH
 
 # 3. لاگ directory درست است
 mkdir -p logs

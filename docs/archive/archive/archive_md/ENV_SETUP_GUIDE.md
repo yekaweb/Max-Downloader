@@ -50,8 +50,8 @@ ADMIN_IDS=آیدی_شما
 
 ## ✨ چیزهایی که از قبل تنظیم شده:
 
-✅ **Pyrogram API ID**: `38449735`  
-✅ **Pyrogram API Hash**: `30c6936b37f0767f3c3f128df9b2ca00`  
+✅ **Pyrogram API ID**: `YOUR_PYROGRAM_APP_ID`  
+✅ **Pyrogram API Hash**: `YOUR_PYROGRAM_APP_HASH`  
 ✅ **Session Name**: `my_youtube_uploader`  
 ✅ **Database**: SQLite (بدون نیاز به سرور)  
 ✅ **Language**: فارسی (فا)  

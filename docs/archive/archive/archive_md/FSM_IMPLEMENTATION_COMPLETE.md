@@ -242,8 +242,8 @@ python3 main.py
 The bot uses `config_simple.py` with `.env` variables:
 
 ```env
-BOT_TOKEN=8603008659:AAH1UaVOCJpE3heq8CdUtGffvSJFuDI53Ao
-ADMIN_IDS=535435383,242397701
+BOT_TOKEN=YOUR_BOT_TOKEN_HERE
+ADMIN_IDS=123456789,987654321
 DEFAULT_LANGUAGE=fa
 APP_ENV=development
 ```

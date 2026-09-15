@@ -10,9 +10,10 @@ Pro Cache Features:
   3. 🔙 بازگشت
 """
 
-from aiogram import Router, types, F
+from aiogram import Router, types, F, Bot
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message, FSInputFile
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.states.download import DownloadStates
 from bot.keyboards.inline.download import get_format_type_keyboard
@@ -599,6 +600,7 @@ async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContex
     await query.answer("🔄 در حال استخراج صوت...")
     shortcode = query.data.split(":", 1)[1]
     url = f"https://www.instagram.com/reel/{shortcode}/"
+    logger.info(f"[InstagramAudio] Request received for shortcode: {shortcode}")
     
     status_msg = await query.message.reply("🎵 <b>در حال استخراج صوت با کیفیت بالا (MP3)...</b>", parse_mode="HTML")
     
@@ -607,6 +609,7 @@ async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContex
     from pathlib import Path
     from aiogram.types import FSInputFile
     from services.instagram_service import instagram_service
+    from utils.ffmpeg_utils import extract_audio_mp3
     
     temp_dir = Path("temp_downloads")
     temp_dir.mkdir(parents=True, exist_ok=True)
@@ -615,21 +618,17 @@ async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContex
     
     try:
         # 1. Download media directly to disk with session cookies (~2-3s)
+        logger.info(f"[InstagramAudio] Downloading source video for {shortcode}...")
         dl_file = await instagram_service.download_media_to_file(url, temp_src)
         if not dl_file or not os.path.exists(dl_file):
-            # Fallback to /p/ URL
+            logger.info(f"[InstagramAudio] Fallback to /p/ URL for {shortcode}...")
             dl_file = await instagram_service.download_media_to_file(f"https://www.instagram.com/p/{shortcode}/", temp_src)
 
         if dl_file and os.path.exists(dl_file):
-            # 2. Extract MP3 audio stream using ffmpeg
-            proc = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-y", "-i", str(dl_file), "-vn", "-c:a", "libmp3lame", "-b:a", "192k", str(temp_mp3),
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL
-            )
-            await proc.wait()
-
-            if temp_mp3.exists() and temp_mp3.stat().st_size > 1000:
+            logger.info(f"[InstagramAudio] Source downloaded ({os.path.getsize(dl_file)} bytes), extracting MP3...")
+            ok = await extract_audio_mp3(Path(dl_file), temp_mp3, bitrate="192k")
+            if ok and temp_mp3.exists() and temp_mp3.stat().st_size > 1000:
+                logger.info(f"[InstagramAudio] Audio extracted successfully ({temp_mp3.stat().st_size} bytes), sending to user...")
                 await query.message.reply_audio(
                     audio=FSInputFile(temp_mp3),
                     title=f"Instagram Audio ({shortcode})",
@@ -642,16 +641,417 @@ async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContex
                 except Exception:
                     pass
                 return
+            else:
+                logger.error(f"[InstagramAudio] extract_audio_mp3 failed for {shortcode}")
 
         await status_msg.edit_text("❌ متاسفانه استخراج صوت از این ویدیو امکان‌پذیر نشد.", parse_mode="HTML")
     except Exception as e:
-        logger.error(f"[InstagramAudio] Error: {e}", exc_info=True)
+        logger.exception(f"[InstagramAudio] Error: {e}")
         try:
             await status_msg.edit_text(f"❌ خطا در استخراج صوت:\n<code>{str(e)[:100]}</code>", parse_mode="HTML")
         except Exception:
             pass
     finally:
         for f in [temp_mp3, temp_src]:
+            if f.exists():
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# AI MUSIC RECOGNITION (SHAZAM) & STUDIO DOWNLOAD HANDLERS
+# ═══════════════════════════════════════════════════════════════════════
+
+import hashlib
+import asyncio
+import os
+from pathlib import Path
+from services.music_recognition_service import music_recognition_service
+from services.music_downloader_service import music_downloader_service
+from services.instagram_service import instagram_service
+from utils.ffmpeg_utils import extract_audio_mp3
+
+# In-memory query cache for track ID mapping
+_music_cache: dict = {}
+
+
+def _cache_track_data(data: dict) -> str:
+    title = data.get("title", "")
+    artist = data.get("artist", "")
+    tid = hashlib.md5(f"{title}_{artist}_{data.get('shazam_url')}".encode()).hexdigest()[:12]
+    _music_cache[tid] = data
+    return tid
+
+
+@router.callback_query(F.data.startswith("shazam:"))
+async def handle_shazam_callback(query: CallbackQuery, state: FSMContext, bot: Bot):
+    """
+    Handle 🔍 تشخیص نام موزیک (Shazam) button.
+    Identifies music in the media and gives full 320kbps download option.
+    """
+    await query.answer("🔍 در حال آنالیز و شناسایی موسیقی...")
+    raw_data = query.data.split(":", 1)[1]
+    logger.info(f"[ShazamCallback] Request received with raw_data={raw_data}")
+    
+    status_msg = await query.message.reply(
+        "🔍 <b>در حال گوش دادن به آهنگ و جستجو در هوش مصنوعی Shazam...</b>\n\n"
+        "⚡ <i>لطفاً چند ثانیه صبر کنید...</i>",
+        parse_mode="HTML"
+    )
+
+    temp_dir = Path("temp_downloads")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_mp3 = temp_dir / f"shazam_aud_{query.from_user.id}_{int(asyncio.get_event_loop().time())}.mp3"
+    temp_src = temp_dir / f"shazam_src_{query.from_user.id}_{int(asyncio.get_event_loop().time())}.mp4"
+
+    try:
+        audio_target = None
+        shortcode = ""
+        
+        # Check source type
+        if raw_data.startswith("ig:"):
+            shortcode = raw_data.split(":", 1)[1]
+            url = f"https://www.instagram.com/reel/{shortcode}/"
+            logger.info(f"[ShazamCallback] Downloading source for Instagram {shortcode}...")
+            dl_file = await instagram_service.download_media_to_file(url, temp_src)
+            if not dl_file or not os.path.exists(dl_file):
+                logger.info(f"[ShazamCallback] Fallback to /p/ URL for {shortcode}...")
+                dl_file = await instagram_service.download_media_to_file(f"https://www.instagram.com/p/{shortcode}/", temp_src)
+            
+            if dl_file and os.path.exists(dl_file):
+                logger.info(f"[ShazamCallback] Source file downloaded ({os.path.getsize(dl_file)} bytes), extracting 60s sample...")
+                ok = await extract_audio_mp3(Path(dl_file), temp_mp3, bitrate="192k", max_duration=60)
+                if ok and temp_mp3.exists() and temp_mp3.stat().st_size > 500:
+                    audio_target = temp_mp3
+        else:
+            shortcode = raw_data
+            url = f"https://www.instagram.com/reel/{shortcode}/"
+            dl_file = await instagram_service.download_media_to_file(url, temp_src)
+            if dl_file and os.path.exists(dl_file):
+                ok = await extract_audio_mp3(Path(dl_file), temp_mp3, bitrate="192k", max_duration=60)
+                if ok and temp_mp3.exists() and temp_mp3.stat().st_size > 500:
+                    audio_target = temp_mp3
+
+        if not audio_target or not audio_target.exists():
+            logger.error(f"[ShazamCallback] Audio extraction failed for shortcode={shortcode}")
+            await status_msg.edit_text("❌ خطا در استخراج صوت جهت شناسایی.", parse_mode="HTML")
+            return
+
+        # Run AI Shazam Recognition with background isolation
+        logger.info(f"[ShazamCallback] Running Shazam recognition on {audio_target}...")
+        track_info = await music_recognition_service.recognize_audio(audio_target, try_enhancement=True)
+        
+        if track_info:
+            logger.info(f"[ShazamCallback] Recognized: {track_info.get('title')} by {track_info.get('artist')}")
+            tid = _cache_track_data(track_info)
+            title = track_info.get("title", "Unknown")
+            artist = track_info.get("artist", "Unknown")
+            album = track_info.get("album", "")
+            genre = track_info.get("genre", "")
+            year = track_info.get("release_year", "")
+            cover_url = track_info.get("cover_url", "")
+            spotify_url = track_info.get("spotify_url", "")
+            youtube_url = track_info.get("youtube_url", "")
+
+            caption_lines = [
+                "🎵 <b>موسیقی شناسایی شد!</b>",
+                "",
+                f"📌 <b>عنوان:</b> {title}",
+                f"👤 <b>خواننده / هنرمند:</b> {artist}",
+            ]
+            if album and album != "Single / Unknown Album":
+                caption_lines.append(f"💿 <b>آلبوم:</b> {album}")
+            if genre:
+                caption_lines.append(f"🏷 <b>سبک:</b> {genre}")
+            if year:
+                caption_lines.append(f"📅 <b>سال انتشار:</b> {year}")
+
+            caption_lines.append("")
+            caption_lines.append("⚡ <i>شناسایی شده توسط @MaxDownloaderBot</i>")
+            caption_text = "\n".join(caption_lines)
+
+            kb_builder = InlineKeyboardBuilder()
+            kb_builder.button(text="📥 دانلود نسخه کامل آهنگ (320kbps)", callback_data=f"dl_music:{tid}")
+            if shortcode:
+                kb_builder.button(text="🎵 استخراج صوت کلیپ (MP3)", callback_data=f"ig_audio:{shortcode}")
+            
+            stream_row = []
+            if spotify_url:
+                stream_row.append(InlineKeyboardButton(text="🎧 Spotify", url=spotify_url))
+            if youtube_url:
+                stream_row.append(InlineKeyboardButton(text="▶️ YouTube", url=youtube_url))
+            if stream_row:
+                kb_builder.row(*stream_row)
+            
+            kb_builder.adjust(1, 1, len(stream_row) if stream_row else 1)
+
+            # Send result with cover if available
+            sent_with_cover = False
+            if cover_url and cover_url.startswith("http"):
+                try:
+                    await query.message.reply_photo(
+                        photo=cover_url,
+                        caption=caption_text,
+                        reply_markup=kb_builder.as_markup(),
+                        parse_mode="HTML"
+                    )
+                    sent_with_cover = True
+                    try:
+                        await status_msg.delete()
+                    except Exception:
+                        pass
+                except Exception as photo_err:
+                    logger.warning(f"Could not send track cover photo: {photo_err}")
+
+            if not sent_with_cover:
+                await status_msg.edit_text(
+                    caption_text,
+                    reply_markup=kb_builder.as_markup(),
+                    parse_mode="HTML"
+                )
+        else:
+            logger.info(f"[ShazamCallback] No track match found for shortcode={shortcode}")
+            no_match_builder = InlineKeyboardBuilder()
+            if shortcode:
+                no_match_builder.button(text="🎵 استخراج صوت کلیپ (MP3)", callback_data=f"ig_audio:{shortcode}")
+                no_match_builder.adjust(1)
+            
+            await status_msg.edit_text(
+                "❌ <b>موسیقی رسمی در پایگاه داده یافت نشد.</b>\n\n"
+                "💡 <i>علت احتمالی: صدای ویدیو شامل مکالمه، پادکست، یا رمیکس محلی است.</i>\n\n"
+                "می‌توانید صوت خود کلیپ را مستقیماً استخراج و دانلود نمایید:",
+                reply_markup=no_match_builder.as_markup() if shortcode else None,
+                parse_mode="HTML"
+            )
+
+    except Exception as e:
+        logger.exception(f"[ShazamCallback] Error: {e}")
+        try:
+            await status_msg.edit_text(f"❌ خطا در شناسایی موزیک:\n<code>{str(e)[:120]}</code>", parse_mode="HTML")
+        except Exception:
+            pass
+    finally:
+        for f in [temp_mp3, temp_src]:
+            if f.exists():
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+
+
+@router.callback_query(F.data.startswith("dl_music:"))
+async def handle_download_full_music(query: CallbackQuery, state: FSMContext, bot: Bot):
+    """
+    Handle 📥 دانلود نسخه کامل آهنگ (320kbps) button.
+    Searches and delivers the full high-fidelity studio track.
+    """
+    await query.answer("📥 در حال آماده‌سازی دانلود آهنگ...")
+    tid = query.data.split(":", 1)[1]
+    track_info = _music_cache.get(tid)
+
+    query_term = None
+    title = "Track"
+    artist = "Artist"
+    if track_info:
+        query_term = track_info.get("search_query")
+        title = track_info.get("title", "Track")
+        artist = track_info.get("artist", "Artist")
+    
+    if not query_term:
+        query_term = f"music_{tid}"
+
+    logger.info(f"[DownloadFullMusic] Searching and downloading full track for '{query_term}' (tid={tid})...")
+
+    status_msg = await query.message.reply(
+        f"📥 <b>در حال دانلود نسخه باکیفیت و کامل (320kbps)...</b>\n\n"
+        f"🎵 <i>{title} - {artist}</i>\n"
+        f"⚡ <i>لطفاً چند لحظه شکیبا باشید...</i>",
+        parse_mode="HTML"
+    )
+
+    temp_dir = Path("temp_downloads")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        res = await music_downloader_service.download_track_by_query(
+            query=query_term,
+            output_dir=temp_dir,
+            custom_filename=f"studio_{tid}"
+        )
+
+        if res and res.get("file_path") and os.path.exists(res["file_path"]):
+            f_path = res["file_path"]
+            track_title = track_info.get("title") if track_info else res.get("title", title)
+            track_performer = track_info.get("artist") if track_info else res.get("artist", artist)
+            duration = res.get("duration")
+
+            logger.info(f"[DownloadFullMusic] Full track ready at {f_path}, sending audio...")
+            await query.message.reply_audio(
+                audio=FSInputFile(f_path),
+                title=track_title,
+                performer=track_performer,
+                duration=int(duration) if duration else None,
+                caption=(
+                    f"🎧 <b>نسخه اصلی و استودیویی (320kbps)</b>\n\n"
+                    f"🎵 <b>{track_title}</b>\n"
+                    f"👤 <b>{track_performer}</b>\n\n"
+                    f"⚡ <i>دانلود شده توسط @MaxDownloaderBot</i>"
+                ),
+                parse_mode="HTML"
+            )
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            
+            # Clean file
+            if os.path.exists(f_path):
+                try:
+                    os.remove(f_path)
+                except Exception:
+                    pass
+            return
+
+        logger.warning(f"[DownloadFullMusic] No downloadable track found for '{query_term}'")
+        await status_msg.edit_text(
+            "❌ متاسفانه دانلود نسخه کامل این قطعه مقدور نشد.\n"
+            "می‌توانید صوت خود ویدیو را استخراج کنید.",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.exception(f"[DownloadFullMusic] Error: {e}")
+        try:
+            await status_msg.edit_text(f"❌ خطا در دانلود نسخه کامل موزیک:\n<code>{str(e)[:120]}</code>", parse_mode="HTML")
+        except Exception:
+            pass
+
+
+@router.message(F.voice | F.audio | F.video_note)
+async def handle_direct_audio_recognition(message: Message, bot: Bot):
+    """
+    Direct Shazam music recognition for voice notes, audio files, and video notes.
+    """
+    logger.info(f"[DirectAudioRecognition] Received voice/audio/video_note from user {message.from_user.id}")
+    status_msg = await message.reply(
+        "🔍 <b>در حال گوش دادن به فایل صوتی و شناسایی هوشمند موزیک (Shazam)...</b>",
+        parse_mode="HTML"
+    )
+
+    temp_dir = Path("temp_downloads")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = temp_dir / f"tg_rec_{message.from_user.id}_{message.message_id}.mp3"
+    temp_raw = temp_dir / f"tg_raw_{message.from_user.id}_{message.message_id}"
+
+    try:
+        # Determine file_id
+        file_id = None
+        if message.voice:
+            file_id = message.voice.file_id
+            temp_raw = temp_raw.with_suffix(".ogg")
+        elif message.audio:
+            file_id = message.audio.file_id
+            temp_raw = temp_raw.with_suffix(".mp3")
+        elif message.video_note:
+            file_id = message.video_note.file_id
+            temp_raw = temp_raw.with_suffix(".mp4")
+
+        if not file_id:
+            await status_msg.edit_text("❌ فایل معتبری دریافت نشد.")
+            return
+
+        # Download from Telegram
+        logger.info(f"[DirectAudioRecognition] Downloading file {file_id} from Telegram...")
+        tg_file = await bot.get_file(file_id)
+        await bot.download_file(tg_file.file_path, destination=temp_raw)
+
+        if not temp_raw.exists() or temp_raw.stat().st_size < 500:
+            logger.error(f"[DirectAudioRecognition] Downloaded raw file missing or too small ({temp_raw})")
+            await status_msg.edit_text("❌ خطا در دریافت فایل از تلگرام.")
+            return
+
+        # Convert to MP3
+        logger.info(f"[DirectAudioRecognition] Converting raw audio to MP3...")
+        ok = await extract_audio_mp3(temp_raw, temp_file, max_duration=60)
+        target_file = temp_file if (ok and temp_file.exists() and temp_file.stat().st_size > 500) else temp_raw
+
+        # Recognize
+        logger.info(f"[DirectAudioRecognition] Running recognize_audio on {target_file}...")
+        track_info = await music_recognition_service.recognize_audio(target_file, try_enhancement=True)
+        if track_info:
+            logger.info(f"[DirectAudioRecognition] Track identified: {track_info.get('title')} - {track_info.get('artist')}")
+            tid = _cache_track_data(track_info)
+            title = track_info.get("title", "Unknown")
+            artist = track_info.get("artist", "Unknown")
+            album = track_info.get("album", "")
+            genre = track_info.get("genre", "")
+            year = track_info.get("release_year", "")
+            cover_url = track_info.get("cover_url", "")
+            spotify_url = track_info.get("spotify_url", "")
+            youtube_url = track_info.get("youtube_url", "")
+
+            caption_lines = [
+                "🎵 <b>موسیقی شناسایی شد!</b>",
+                "",
+                f"📌 <b>عنوان:</b> {title}",
+                f"👤 <b>خواننده / هنرمند:</b> {artist}",
+            ]
+            if album and album != "Single / Unknown Album":
+                caption_lines.append(f"💿 <b>آلبوم:</b> {album}")
+            if genre:
+                caption_lines.append(f"🏷 <b>سبک:</b> {genre}")
+            if year:
+                caption_lines.append(f"📅 <b>سال انتشار:</b> {year}")
+
+            caption_lines.append("")
+            caption_lines.append("⚡ <i>شناسایی شده توسط @MaxDownloaderBot</i>")
+            caption_text = "\n".join(caption_lines)
+
+            kb_builder = InlineKeyboardBuilder()
+            kb_builder.button(text="📥 دانلود نسخه کامل آهنگ (320kbps)", callback_data=f"dl_music:{tid}")
+            
+            stream_row = []
+            if spotify_url:
+                stream_row.append(InlineKeyboardButton(text="🎧 Spotify", url=spotify_url))
+            if youtube_url:
+                stream_row.append(InlineKeyboardButton(text="▶️ YouTube", url=youtube_url))
+            if stream_row:
+                kb_builder.row(*stream_row)
+            kb_builder.adjust(1, len(stream_row) if stream_row else 1)
+
+            if cover_url and cover_url.startswith("http"):
+                try:
+                    await message.reply_photo(
+                        photo=cover_url,
+                        caption=caption_text,
+                        reply_markup=kb_builder.as_markup(),
+                        parse_mode="HTML"
+                    )
+                    try:
+                        await status_msg.delete()
+                    except Exception:
+                        pass
+                    return
+                except Exception:
+                    pass
+
+            await status_msg.edit_text(caption_text, reply_markup=kb_builder.as_markup(), parse_mode="HTML")
+        else:
+            logger.info(f"[DirectAudioRecognition] No track identified from user audio")
+            await status_msg.edit_text(
+                "❌ <b>موسیقی در پایگاه داده شناسایی نشد.</b>\n\n"
+                "💡 لطفاً فایل صوتی واضح‌تر یا طولانی‌تری ارسال کنید.",
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.exception(f"[DirectAudioRecognition] Error: {e}")
+        try:
+            await status_msg.edit_text(f"❌ خطا در پردازش صوت:\n<code>{str(e)[:120]}</code>", parse_mode="HTML")
+        except Exception:
+            pass
+    finally:
+        for f in [temp_file, temp_raw]:
             if f.exists():
                 try:
                     f.unlink()

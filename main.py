@@ -7,6 +7,13 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+
+if sys.platform != "win32":
+    try:
+        asyncio.get_event_loop_policy().set_child_watcher(asyncio.ThreadedChildWatcher())
+    except Exception:
+        pass
+
 from loguru import logger
 from config import settings
 

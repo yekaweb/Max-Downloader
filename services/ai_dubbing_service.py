@@ -85,16 +85,12 @@ class AiDubbingService:
                 str(output_path),
             ]
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
+        from utils.ffmpeg_utils import run_ffmpeg
+        success, stdout, stderr = await run_ffmpeg(cmd, timeout=300)
 
-        if proc.returncode != 0:
-            logger.error(f"FFmpeg dubbing failed: {stderr.decode()}")
-            raise RuntimeError(f"FFmpeg dubbing failed with code {proc.returncode}")
+        if not success:
+            logger.error(f"FFmpeg dubbing failed: {stderr}")
+            raise RuntimeError(f"FFmpeg dubbing failed: {stderr}")
 
         return output_path
 

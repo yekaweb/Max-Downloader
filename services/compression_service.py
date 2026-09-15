@@ -373,26 +373,15 @@ class CompressionService:
     ) -> Dict:
         """اجرای FFmpeg process"""
         try:
+            from utils.ffmpeg_utils import run_ffmpeg
             logger.info(f"[COMPRESS] Running FFmpeg: {' '.join(cmd)}")
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
+            success, stdout_text, stderr_text = await run_ffmpeg(cmd, timeout=600)
             
-            stdout, stderr = await process.communicate()
-            stdout_text = stdout.decode('utf-8', errors='replace').strip() if stdout else ''
-            stderr_text = stderr.decode('utf-8', errors='replace').strip() if stderr else ''
-            
-            if process.returncode == 0:
-                if stdout_text:
-                    logger.debug(f"[COMPRESS] FFmpeg stdout: {stdout_text}")
-                if stderr_text:
-                    logger.debug(f"[COMPRESS] FFmpeg stderr: {stderr_text}")
+            if success:
                 logger.info(f"[COMPRESS] FFmpeg succeeded")
                 return {'status': 'success'}
             else:
-                error_msg = stderr_text or stdout_text or f"FFmpeg failed with return code {process.returncode}"
+                error_msg = stderr_text or stdout_text or "FFmpeg failed"
                 logger.error(f"[COMPRESS] FFmpeg failed: {error_msg}")
                 return {'status': 'failed', 'error': error_msg}
         
@@ -564,14 +553,11 @@ class AdaptiveCompression:
         ]
         
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            stdout, _ = await process.communicate()
-            duration = float(stdout.decode().strip())
+            from utils.ffmpeg_utils import run_ffmpeg
+            success, stdout, stderr = await run_ffmpeg(cmd, timeout=30)
+            if not success or not stdout.strip():
+                return None
+            duration = float(stdout.strip())
             
             # Calculate estimated size
             estimated_size_mb = (bitrate * duration) / 60 / 8

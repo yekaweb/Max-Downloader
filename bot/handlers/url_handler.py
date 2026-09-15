@@ -1,6 +1,6 @@
 """URL entrypoint and download menu routing."""
 
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
@@ -172,6 +172,149 @@ async def handle_direct_instagram_link(message: Message, state: FSMContext):
     url = (message.text or "").strip()
     from bot.handlers.download_exec import handle_instant_instagram_download
     await handle_instant_instagram_download(message, url, state)
+
+
+@router.message(Command("music", "song"))
+async def cmd_music_search(message: Message, state: FSMContext, bot: Bot):
+    """
+    Direct full music search & 320kbps MP3 downloader with Pro Cache.
+    Usage: /music <song name / artist> or /song <song name>
+    """
+    import hashlib
+    import os
+    from pathlib import Path
+    from aiogram.types import FSInputFile
+    from services.music_downloader_service import music_downloader_service
+    from database.connection import AsyncSessionLocal
+    from database.repositories.cached_download_repo import CachedDownloadRepository
+
+    args = (message.text or "").split(maxsplit=1)
+    if len(args) < 2 or not args[1].strip():
+        await message.reply(
+            "🎵 <b>جستجو و دانلود مستقیم موزیک (320kbps)</b>\n\n"
+            "💡 لطفاً نام آهنگ یا خواننده را همراه با دستور ارسال کنید:\n"
+            "مثال:\n"
+            "<code>/music shadmehr aghili</code>\n"
+            "<code>/song billie eilish birds of a feather</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    query_term = args[1].strip()
+    clean_norm_key = query_term.lower().strip()
+    music_hash = hashlib.sha256(f"music_320_{clean_norm_key}".encode()).hexdigest()
+
+    # 1. Check Pro Cache first (Instant Delivery in 0.1s)
+    try:
+        async with AsyncSessionLocal() as session:
+            repo = CachedDownloadRepository(session)
+            cached = await repo.find_valid_by_url_hash(music_hash)
+            if cached and cached.qualities:
+                cached_file_id = cached.qualities[0].telegram_file_id
+                logger.info(f"[MusicCommand] Pro Cache HIT for '{query_term}'! Delivering instantly.")
+                await message.reply_audio(
+                    audio=cached_file_id,
+                    title=cached.title or query_term,
+                    performer=cached.uploader or "Music",
+                    duration=cached.duration,
+                    caption=(
+                        f"🎧 <b>نسخه اصلی و استودیویی (320kbps)</b>\n\n"
+                        f"🎵 <b>{cached.title or query_term}</b>\n"
+                        f"👤 <b>{cached.uploader or 'Music'}</b>\n\n"
+                        f"⚡ <i>تحویل آنی از کش ابری تلگرام (۰.۱ ثانیه)</i>\n"
+                        f"⚡ <i>@MaxDownloaderBot</i>"
+                    ),
+                    parse_mode="HTML"
+                )
+                await repo.mark_used(cached.id, cached.qualities[0].id)
+                return
+    except Exception as c_lookup_err:
+        logger.warning(f"[MusicCommand] Pro Cache lookup error: {c_lookup_err}")
+
+    status_msg = await message.reply(
+        f"🔍 <b>در حال جستجو و دریافت نسخه باکیفیت و کامل (320kbps)...</b>\n\n"
+        f"🎵 <i>{query_term}</i>\n"
+        f"⚡ <i>لطفاً چند لحظه شکیبا باشید...</i>",
+        parse_mode="HTML"
+    )
+
+    temp_dir = Path("temp_downloads")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    f_path = None
+
+    try:
+        res = await music_downloader_service.download_track_by_query(
+            query=query_term,
+            output_dir=temp_dir,
+            custom_filename=f"search_{music_hash[:8]}"
+        )
+
+        if res and res.get("file_path") and os.path.exists(res["file_path"]):
+            f_path = res["file_path"]
+            track_title = res.get("title", query_term)
+            track_performer = res.get("artist", "Music")
+            duration = res.get("duration")
+
+            sent_msg = await message.reply_audio(
+                audio=FSInputFile(f_path),
+                title=track_title,
+                performer=track_performer,
+                duration=int(duration) if duration else None,
+                caption=(
+                    f"🎧 <b>نسخه اصلی و استودیویی (320kbps)</b>\n\n"
+                    f"🎵 <b>{track_title}</b>\n"
+                    f"👤 <b>{track_performer}</b>\n\n"
+                    f"⚡ <i>دانلود شده توسط @MaxDownloaderBot</i>"
+                ),
+                parse_mode="HTML"
+            )
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+
+            # 2. Save to Pro Cache
+            if sent_msg and sent_msg.audio:
+                try:
+                    async with AsyncSessionLocal() as session:
+                        repo = CachedDownloadRepository(session)
+                        await repo.create_from_upload(
+                            source_url=f"music://{clean_norm_key}",
+                            source_platform="music",
+                            media_title=track_title,
+                            media_duration=int(duration) if duration else None,
+                            media_uploader=track_performer,
+                            telegram_file_id=sent_msg.audio.file_id,
+                            file_size=os.path.getsize(f_path) if os.path.exists(f_path) else 0,
+                            file_type="audio/mp3",
+                            quality="320kbps",
+                            format_codec="mp3",
+                            format_container="mp3",
+                            url_hash=music_hash,
+                        )
+                        logger.info(f"[MusicCommand] Pro Cache SAVED for '{query_term}' (hash={music_hash[:8]})")
+                except Exception as c_save_err:
+                    logger.warning(f"[MusicCommand] Failed to write Pro Cache: {c_save_err}")
+            return
+
+        await status_msg.edit_text(
+            f"❌ متاسفانه آهنگی با عنوان <b>{query_term}</b> یافت نشد.\n"
+            f"💡 لطفاً نام لاتین یا نام دقیق‌تری را امتحان کنید.",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.exception(f"[MusicCommand] Error: {e}")
+        try:
+            await status_msg.edit_text(f"❌ خطا در دانلود موزیک:\n<code>{str(e)[:120]}</code>", parse_mode="HTML")
+        except Exception:
+            pass
+    finally:
+        # Guarantee 0-disk footprint: delete file immediately
+        if f_path and os.path.exists(f_path):
+            try:
+                os.remove(f_path)
+            except Exception:
+                pass
 
 
 @router.callback_query(F.data == "cancel_download")

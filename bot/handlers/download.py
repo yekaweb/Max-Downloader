@@ -596,12 +596,41 @@ async def use_cached_file_legacy(
 
 @router.callback_query(F.data.startswith("ig_audio:"))
 async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContext, bot: Bot):
-    """Handle 🎵 استخراج صوت (MP3) button for Instagram Reels/Posts."""
-    await query.answer("🔄 در حال استخراج صوت...")
+    """Handle 🎵 استخراج صوت (MP3) button for Instagram Reels/Posts with Pro Cache."""
+    await query.answer("🔄 در حال بررسی و استخراج صوت...")
     shortcode = query.data.split(":", 1)[1]
     url = f"https://www.instagram.com/reel/{shortcode}/"
-    logger.info(f"[InstagramAudio] Request received for shortcode: {shortcode}")
+    audio_hash = hashlib.sha256(f"ig_audio_{shortcode}".encode()).hexdigest()
+    logger.info(f"[InstagramAudio] Request received for shortcode: {shortcode} (hash={audio_hash[:8]})")
     
+    # 1. Check Pro Cache first (Instant Delivery in 0.1s)
+    try:
+        from database.connection import AsyncSessionLocal
+        from database.repositories.cached_download_repo import CachedDownloadRepository
+        
+        async with AsyncSessionLocal() as session:
+            repo = CachedDownloadRepository(session)
+            cached = await repo.find_valid_by_url_hash(audio_hash)
+            if cached and cached.qualities:
+                cached_file_id = cached.qualities[0].telegram_file_id
+                logger.info(f"[InstagramAudio] Pro Cache HIT for shortcode={shortcode}! Delivering instantly.")
+                await query.message.reply_audio(
+                    audio=cached_file_id,
+                    title=cached.title or f"Instagram Audio ({shortcode})",
+                    performer=cached.uploader or "Instagram Audio",
+                    duration=cached.duration,
+                    caption=(
+                        f"🎵 <b>فایل صوتی استخراج شده (MP3 - 192kbps)</b>\n\n"
+                        f"⚡ <i>تحویل آنی از کش ابری تلگرام</i>\n"
+                        f"⚡ <i>@MaxDownloaderBot</i>"
+                    ),
+                    parse_mode="HTML"
+                )
+                await repo.mark_used(cached.id, cached.qualities[0].id)
+                return
+    except Exception as cache_lookup_err:
+        logger.warning(f"[InstagramAudio] Cache lookup error: {cache_lookup_err}")
+
     status_msg = await query.message.reply("🎵 <b>در حال استخراج صوت با کیفیت بالا (MP3)...</b>", parse_mode="HTML")
     
     import asyncio
@@ -617,7 +646,7 @@ async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContex
     temp_src = temp_dir / f"ig_src_{shortcode}.mp4"
     
     try:
-        # 1. Download media directly to disk with session cookies (~2-3s)
+        # 2. Download media directly to disk with session cookies (~2-3s)
         logger.info(f"[InstagramAudio] Downloading source video for {shortcode}...")
         dl_file = await instagram_service.download_media_to_file(url, temp_src)
         if not dl_file or not os.path.exists(dl_file):
@@ -629,7 +658,7 @@ async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContex
             ok = await extract_audio_mp3(Path(dl_file), temp_mp3, bitrate="192k")
             if ok and temp_mp3.exists() and temp_mp3.stat().st_size > 1000:
                 logger.info(f"[InstagramAudio] Audio extracted successfully ({temp_mp3.stat().st_size} bytes), sending to user...")
-                await query.message.reply_audio(
+                sent_msg = await query.message.reply_audio(
                     audio=FSInputFile(temp_mp3),
                     title=f"Instagram Audio ({shortcode})",
                     performer="Instagram Audio",
@@ -640,6 +669,29 @@ async def handle_instagram_audio_callback(query: CallbackQuery, state: FSMContex
                     await status_msg.delete()
                 except Exception:
                     pass
+                
+                # 3. Save to Pro Cache
+                if sent_msg and sent_msg.audio:
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            repo = CachedDownloadRepository(session)
+                            await repo.create_from_upload(
+                                source_url=url,
+                                source_platform="instagram_audio",
+                                media_title=f"Instagram Audio ({shortcode})",
+                                media_duration=sent_msg.audio.duration,
+                                media_uploader="Instagram Audio",
+                                telegram_file_id=sent_msg.audio.file_id,
+                                file_size=temp_mp3.stat().st_size,
+                                file_type="audio/mp3",
+                                quality="192kbps",
+                                format_codec="mp3",
+                                format_container="mp3",
+                                url_hash=audio_hash,
+                            )
+                            logger.info(f"[InstagramAudio] Pro Cache SAVED for shortcode={shortcode}")
+                    except Exception as c_save_err:
+                        logger.warning(f"[InstagramAudio] Failed to write Pro Cache: {c_save_err}")
                 return
             else:
                 logger.error(f"[InstagramAudio] extract_audio_mp3 failed for {shortcode}")
@@ -844,8 +896,8 @@ async def handle_shazam_callback(query: CallbackQuery, state: FSMContext, bot: B
 @router.callback_query(F.data.startswith("dl_music:"))
 async def handle_download_full_music(query: CallbackQuery, state: FSMContext, bot: Bot):
     """
-    Handle 📥 دانلود نسخه کامل آهنگ (320kbps) button.
-    Searches and delivers the full high-fidelity studio track.
+    Handle 📥 دانلود نسخه کامل آهنگ (320kbps) button with Pro Cache.
+    Delivers cached tracks in <0.2s from Telegram cloud without server download.
     """
     await query.answer("📥 در حال آماده‌سازی دانلود آهنگ...")
     tid = query.data.split(":", 1)[1]
@@ -854,15 +906,50 @@ async def handle_download_full_music(query: CallbackQuery, state: FSMContext, bo
     query_term = None
     title = "Track"
     artist = "Artist"
+    shazam_key = None
     if track_info:
         query_term = track_info.get("search_query")
         title = track_info.get("title", "Track")
         artist = track_info.get("artist", "Artist")
+        shazam_key = track_info.get("key")
     
     if not query_term:
-        query_term = f"music_{tid}"
+        query_term = f"{artist} {title}".strip() if (title != "Track" and artist != "Artist") else f"music_{tid}"
 
-    logger.info(f"[DownloadFullMusic] Searching and downloading full track for '{query_term}' (tid={tid})...")
+    # Generate normalized cache hash
+    clean_norm_key = f"{artist.lower().strip()}_{title.lower().strip()}" if (title != "Track" and artist != "Artist") else query_term.lower().strip()
+    music_hash = hashlib.sha256(f"music_320_{clean_norm_key}".encode()).hexdigest()
+    logger.info(f"[DownloadFullMusic] Request for '{query_term}' (tid={tid}, hash={music_hash[:8]})...")
+
+    # 1. Pro Cache Lookup (Instant Delivery in 0.1s)
+    try:
+        from database.connection import AsyncSessionLocal
+        from database.repositories.cached_download_repo import CachedDownloadRepository
+        
+        async with AsyncSessionLocal() as session:
+            repo = CachedDownloadRepository(session)
+            cached = await repo.find_valid_by_url_hash(music_hash)
+            if cached and cached.qualities:
+                cached_file_id = cached.qualities[0].telegram_file_id
+                logger.info(f"[DownloadFullMusic] Pro Cache HIT for '{query_term}'! Delivering instantly.")
+                await query.message.reply_audio(
+                    audio=cached_file_id,
+                    title=cached.title or title,
+                    performer=cached.uploader or artist,
+                    duration=cached.duration,
+                    caption=(
+                        f"🎧 <b>نسخه اصلی و استودیویی (320kbps)</b>\n\n"
+                        f"🎵 <b>{cached.title or title}</b>\n"
+                        f"👤 <b>{cached.uploader or artist}</b>\n\n"
+                        f"⚡ <i>تحویل آنی از کش ابری تلگرام (۰.۱ ثانیه)</i>\n"
+                        f"⚡ <i>@MaxDownloaderBot</i>"
+                    ),
+                    parse_mode="HTML"
+                )
+                await repo.mark_used(cached.id, cached.qualities[0].id)
+                return
+    except Exception as cache_lookup_err:
+        logger.warning(f"[DownloadFullMusic] Cache lookup error: {cache_lookup_err}")
 
     status_msg = await query.message.reply(
         f"📥 <b>در حال دانلود نسخه باکیفیت و کامل (320kbps)...</b>\n\n"
@@ -873,6 +960,7 @@ async def handle_download_full_music(query: CallbackQuery, state: FSMContext, bo
 
     temp_dir = Path("temp_downloads")
     temp_dir.mkdir(parents=True, exist_ok=True)
+    f_path = None
 
     try:
         res = await music_downloader_service.download_track_by_query(
@@ -888,7 +976,7 @@ async def handle_download_full_music(query: CallbackQuery, state: FSMContext, bo
             duration = res.get("duration")
 
             logger.info(f"[DownloadFullMusic] Full track ready at {f_path}, sending audio...")
-            await query.message.reply_audio(
+            sent_msg = await query.message.reply_audio(
                 audio=FSInputFile(f_path),
                 title=track_title,
                 performer=track_performer,
@@ -906,12 +994,28 @@ async def handle_download_full_music(query: CallbackQuery, state: FSMContext, bo
             except Exception:
                 pass
             
-            # Clean file
-            if os.path.exists(f_path):
+            # 2. Save to Pro Cache
+            if sent_msg and sent_msg.audio:
                 try:
-                    os.remove(f_path)
-                except Exception:
-                    pass
+                    async with AsyncSessionLocal() as session:
+                        repo = CachedDownloadRepository(session)
+                        await repo.create_from_upload(
+                            source_url=f"music://{clean_norm_key}",
+                            source_platform="music",
+                            media_title=track_title,
+                            media_duration=int(duration) if duration else None,
+                            media_uploader=track_performer,
+                            telegram_file_id=sent_msg.audio.file_id,
+                            file_size=os.path.getsize(f_path) if os.path.exists(f_path) else 0,
+                            file_type="audio/mp3",
+                            quality="320kbps",
+                            format_codec="mp3",
+                            format_container="mp3",
+                            url_hash=music_hash,
+                        )
+                        logger.info(f"[DownloadFullMusic] Pro Cache SAVED for '{query_term}' (hash={music_hash[:8]})")
+                except Exception as c_save_err:
+                    logger.warning(f"[DownloadFullMusic] Failed to write Pro Cache: {c_save_err}")
             return
 
         logger.warning(f"[DownloadFullMusic] No downloadable track found for '{query_term}'")
@@ -926,6 +1030,13 @@ async def handle_download_full_music(query: CallbackQuery, state: FSMContext, bo
             await status_msg.edit_text(f"❌ خطا در دانلود نسخه کامل موزیک:\n<code>{str(e)[:120]}</code>", parse_mode="HTML")
         except Exception:
             pass
+    finally:
+        # Guarantee 0-disk footprint: delete file immediately
+        if f_path and os.path.exists(f_path):
+            try:
+                os.remove(f_path)
+            except Exception:
+                pass
 
 
 @router.message(F.voice | F.audio | F.video_note)

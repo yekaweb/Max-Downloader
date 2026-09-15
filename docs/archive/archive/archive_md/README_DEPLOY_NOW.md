@@ -135,7 +135,7 @@ python3 main.py
 
 Your bot already knows admin IDs from `.env`:
 ```
-ADMIN_IDS=535435383,242397701
+ADMIN_IDS=123456789,987654321
 ```
 
 So `/admin` will work for those IDs, and show error for others.

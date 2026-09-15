@@ -5,7 +5,7 @@
 - [ ] Database is connected
 - [ ] Redis is running (if enabled)
 - [ ] Telegram account has access to bot
-- [ ] Admin ID in .env is correct (`ADMIN_IDS=535435383,242397701`)
+- [ ] Admin ID in .env is correct (`ADMIN_IDS=123456789,987654321`)
 
 ---
 

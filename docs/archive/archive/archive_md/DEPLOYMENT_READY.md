@@ -191,7 +191,7 @@ bot/loader_complete.py
 
 Update `.env` for:
 - `BOT_TOKEN` - Telegram bot token
-- `ADMIN_IDS` - Comma-separated admin IDs (e.g., `535435383,242397701`)
+- `ADMIN_IDS` - Comma-separated admin IDs (e.g., `123456789,987654321`)
 - `DB_*` - Database settings
 - `REDIS_*` - Redis settings
 
